@@ -1,0 +1,125 @@
+﻿
+Information Architecture of App
+├── Authentication
+│   ├── Splash
+│   ├── Login
+│   ├── Register
+│   ├── Pending Approval
+│   └── Forgot Password
+│
+├── Home
+│   ├── Banner
+│   ├── News
+│   ├── Products
+│   └── Notifications
+│
+├── Products
+│   ├── Domestic
+│   └── International
+│
+│       ├── Family
+│       ├── Category
+│       ├── Product List
+│       ├── Product Details
+│       └── Buy Product
+│
+├── Orders
+│
+├── Profile
+└── Settings
+User Flow
+Register
+↓
+Pending Approval
+↓
+Login
+↓
+Home
+↓
+Domestic Buying
+↓
+Family
+↓
+Category
+↓
+Products
+↓
+Product Details
+↓
+Order Form
+↓
+Order Success
+ Screen-by-Screen Documentation
+For every screen I'll write
+Example
+Register Screen
+Purpose
+Register a new buyer/seller.
+Components
+Logo 
+Company Name 
+First Name 
+Last Name 
+Email 
+Mobile 
+User Type 
+Address 
+Register Button 
+Validation
+Required 
+Email valid 
+Phone valid 
+Button Action
+Register
+↓
+Pending Approval
+
+5. Every Product detailed view 
+Product
+Field
+Type
+Required
+Product Name
+Text
+✅
+Family
+Dropdown
+✅
+Category
+Dropdown
+✅
+Location
+Dropdown
+✅
+Live Price
+Number
+✅
+Lot Size
+Number
+✅
+Available Lots
+Number
+✅
+ Every Screen Layout
+																--------------------------------
+																
+																App Bar
+																
+																Search
+																
+																Banner
+																
+																Categories
+																
+																Products
+																
+																Articles
+																
+																Bottom Navigation
+																
+																--------------------
+Colour Codes  for design 
+#57C5CC
+#47B64D
+
+

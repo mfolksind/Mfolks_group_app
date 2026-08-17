@@ -1,0 +1,98 @@
+﻿
+User Registration & Product Purchase Flow
+Professional representation of the workflow shown in the provided sketch.
+Step
+Description
+1. User
+User enters the application.
+2. Register
+User registers by filling the registration form.
+3. Admin Approval
+Registration request is sent to the Admin for approval.
+4. Login
+After approval, the user logs in.
+5. Home Page
+User reaches the Home Page where content is displayed.
+6. Products
+User selects the Products section.
+7. Buying Type
+Choose one:• Domestic Buying• International Buying
+8. Product Family
+Select a product family (e.g., Ferrous, Non-Ferrous, etc.).
+9. Category
+Choose the required product category.
+10. Products List
+Browse available products with live product rates.
+11. Buy Now
+Click 'Buy Now' for the selected product.
+12. Product Details
+Enter or verify purchase details.
+13. Submit
+Submit the purchase request.
+14. Confirmation
+Display 'Thank You' page with bank details.
+Workflow Diagram (Text Representation)
+User  │  ▼Register  │  ▼Registration Sent for Admin Approval  │  ▼Login  │  ▼Home Page (Content)  │  ▼Products  │  ├── Domestic Buying  └── International Buying          │          ▼     Product Family          │          ▼       Category          │          ▼   Products (Live Product Rate)          │       Buy Now          │          ▼   Product Details          │       Submit          │          ▼Thank You (Bank Details)
+
+Detailed information
+Manufacturing Marketplace - Functional Specification
+Structured implementation document prepared from the handwritten design notes.
+1. User Registration
+Fields: Company Name, First Name, Last Name, Mobile Number, Email Address, User Type (Buyer / Seller / Both), Address (Support Multiple Addresses).
+Registration request remains Pending until Admin approval.
+Admin can verify details, contact the user, edit information if required, and Approve/Reject registration.
+Only approved users can log in.
+2. Home Page
+Display platform content, announcements and product entry point.
+Navigate to Products.
+3. Product Hierarchy
+Buying Type: Domestic Buying / International Buying.
+Family: Ferrous, Non-Ferrous, etc.
+Category: Example - Aluminium (AL), Copper, Zinc and other metal categories.
+Product belongs to a Family and Category.
+4. Product Management
+Separate modules for Domestic Products and International Products.
+CRUD Operations (Create, Read, Update, Delete).
+Fields: Family, Category, Product Name, Location, Number of Lots, Lot Size.
+Example: 1 Lot = 25 Tons.
+Display Live Product Rate.
+Buy Now option available.
+5. Order Management
+Fields: Serial No., Party Name, User, Order No., Order Date & Time.
+Buying Type (Domestic/International).
+Family, Category, Product, Location.
+Number of Lots Required.
+Lot Size.
+Total Weight.
+Price.
+Premium.
+Discount.
+Total Price.
+Party/Delivery Address.
+Order Status Workflow: Confirm Order → Payment Received → Dispatched → Completed (with Cancel option).
+6. Admin Panel
+Approve or Reject User Registrations.
+Edit user information before approval.
+Manage Families.
+Manage Categories.
+Manage Domestic Products.
+Manage International Products.
+Manage Orders.
+Manage Users (Add/Edit/Delete).
+Role-Based Access Control (RBAC) and Feature Permissions.
+7. Suggested Database Structure
+Module
+Main Fields
+Users
+CompanyName, FirstName, LastName, Mobile, Email, UserType, Addresses, Status
+Families
+Name, Description
+Categories
+FamilyId, Name, Symbol
+Products
+BuyingType, FamilyId, CategoryId, Name, Location, LotSize, LotsAvailable, LiveRate
+Orders
+OrderNo, UserId, ProductId, Lots, Weight, Price, Premium, Discount, TotalPrice, DeliveryAddress, Status
+8. End-to-End Workflow
+Register → Admin Approval → Login → Home → Products → Domestic/International → Family → Category → Product List (Live Rates) → Buy Now → Enter Order Details → Submit → Thank You / Bank Details → Admin Processes Order.
+

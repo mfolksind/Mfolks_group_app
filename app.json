@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "MetalTrade Pro",
+    "slug": "manufacturing-marketplace-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "metaltrade",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.metaltrade.marketplace"
+    },
+    "android": {
+      "package": "com.metaltrade.marketplace",
+      "adaptiveIcon": {
+        "backgroundColor": "#57C5CC",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ]
+  }
+}
