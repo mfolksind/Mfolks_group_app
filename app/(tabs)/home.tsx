@@ -12,16 +12,15 @@ import {
   Badge,
 } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
-import { getActiveCategories } from '@/api/categories.api';
 import { getFeaturedVariants } from '@/api/products.api';
-import { Variant, Category } from '@/types/backend';
+import { Variant } from '@/types/backend';
+import { liveRatesData, industryNewsData } from '@/data/liveRatesAndNews';
 import { colors, elevation, radius, spacing, typography } from '@/design-system';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Variant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,25 +31,8 @@ export default function HomeScreen() {
       setLoading(true);
       setError(null);
 
-      // Fetch categories and featured products in parallel
-      const [categoriesRes, productsRes] = await Promise.all([
-        getActiveCategories(),
-        getFeaturedVariants(6),
-      ]);
+      const productsRes = await getFeaturedVariants(6);
 
-      // Handle categories response
-      if (categoriesRes.success && categoriesRes.data) {
-        const categoryList = Array.isArray(categoriesRes.data)
-          ? categoriesRes.data
-          : Array.isArray((categoriesRes.data as any)?.data)
-            ? (categoriesRes.data as any).data
-            : [];
-        setCategories(categoryList);
-      } else if (!categoriesRes.success) {
-        console.error('Failed to load categories:', categoriesRes.message);
-      }
-
-      // Handle products response
       if (productsRes.success && productsRes.data) {
         const productsList = Array.isArray(productsRes.data)
           ? productsRes.data
@@ -60,11 +42,6 @@ export default function HomeScreen() {
         setFeaturedProducts(productsList);
       } else if (!productsRes.success) {
         console.error('Failed to load featured products:', productsRes.message);
-      }
-
-      // Only show error if both failed
-      if (!categoriesRes.success && !productsRes.success) {
-        setError('Failed to load content');
       }
     } catch (err) {
       console.error('Error fetching home data:', err);
@@ -88,6 +65,11 @@ export default function HomeScreen() {
   const formatPrice = (price: number) => {
     return `₹${price.toLocaleString('en-IN')}`;
   };
+
+  // Top 5 live rates for home page
+  const topLiveRates = liveRatesData.slice(0, 5);
+  // Top 2 industry news for home page
+  const topNews = industryNewsData.slice(0, 2);
 
   return (
     <View style={styles.container}>
@@ -135,8 +117,8 @@ export default function HomeScreen() {
         <SectionHeader title="Quick Actions" />
         <View style={styles.quickActions}>
           {[
-            { icon: 'globe-outline' as const, label: 'Calculator' },
-            { icon: 'home-outline' as const, label: 'Query' },
+            { icon: 'globe-outline' as const, label: 'Calculator', route: '/live-rates' },
+            { icon: 'trending-up-outline' as const, label: 'Live Rates', route: '/live-rates' },
             { icon: 'cube-outline' as const, label: 'Categories', route: '/(tabs)/products' },
             { icon: 'receipt-outline' as const, label: 'Orders', route: '/(tabs)/orders' },
           ].map((action) => (
@@ -153,43 +135,58 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Categories */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.primary} />
+        {/* Live Market Rates (Before Featured Products) */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.titleWithBadge}>
+            <Text style={styles.sectionTitle}>Live Market Rates</Text>
+            <View style={styles.livePulseDot} />
           </View>
-        ) : (
-          <>
-            <SectionHeader
-              title="Categories"
-              actionLabel="View All"
-              onAction={() => router.push('/(tabs)/products')}
-            />
-            {categories.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.chipScroll}
-              >
-                {categories.slice(0, 8).map((cat) => (
-                  <Chip
-                    key={cat._id}
-                    label={cat.name}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/products/list',
-                        params: { categoryId: cat._id, categoryName: cat.name },
-                      })
-                    }
-                    style={styles.chip}
+          <Pressable onPress={() => router.push('/live-rates')}>
+            <Text style={styles.viewAllAction}>View All</Text>
+          </Pressable>
+        </View>
+
+        <Card style={styles.ratesCard} padding={0}>
+          {topLiveRates.map((item, index) => (
+            <View
+              key={item.id}
+              style={[
+                styles.rateRow,
+                index < topLiveRates.length - 1 && styles.rateBorder,
+              ]}
+            >
+              <View style={styles.rateInfo}>
+                <Text style={styles.rateName}>{item.name}</Text>
+                <Text style={styles.rateUnit}>{item.unit}</Text>
+              </View>
+
+              <View style={styles.rateRight}>
+                <Text style={styles.ratePrice}>{formatPrice(item.price)}</Text>
+                <View
+                  style={[
+                    styles.trendBadge,
+                    item.isPositive ? styles.badgePositive : styles.badgeNegative,
+                  ]}
+                >
+                  <Ionicons
+                    name={item.isPositive ? 'caret-up' : 'caret-down'}
+                    size={11}
+                    color={item.isPositive ? '#137333' : '#C5221F'}
                   />
-                ))}
-              </ScrollView>
-            ) : (
-              <Text style={styles.emptyText}>No categories available</Text>
-            )}
-          </>
-        )}
+                  <Text
+                    style={[
+                      styles.trendText,
+                      item.isPositive ? styles.textPositive : styles.textNegative,
+                    ]}
+                  >
+                    {item.isPositive ? '+' : '-'}
+                    {item.change.toFixed(1)}%
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </Card>
 
         {/* Featured Products */}
         {!loading && (
@@ -252,6 +249,39 @@ export default function HomeScreen() {
           </>
         )}
 
+        {/* Latest Industry News (After Featured Products) */}
+        <SectionHeader
+          title="Latest Industry News"
+          actionLabel="See All"
+          onAction={() => router.push('/industry-news')}
+        />
+        {topNews.map((article) => (
+          <Pressable
+            key={article.id}
+            onPress={() => router.push(`/news/${article.id}`)}
+          >
+            <Card style={styles.newsSmallCard}>
+              <View style={styles.newsSmallHeader}>
+                <Badge label={article.category} variant="info" />
+                <Text style={styles.newsDate}>{article.date}</Text>
+              </View>
+              <Text style={styles.newsTitle} numberOfLines={2}>
+                {article.title}
+              </Text>
+              <Text style={styles.newsSummary} numberOfLines={2}>
+                {article.summary}
+              </Text>
+              <View style={styles.newsSmallFooter}>
+                <Text style={styles.readTimeText}>{article.readTime}</Text>
+                <View style={styles.readLink}>
+                  <Text style={styles.readLinkText}>Read More</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                </View>
+              </View>
+            </Card>
+          </Pressable>
+        ))}
+
         {/* Info Card */}
         <Card style={styles.infoCard}>
           <View style={styles.infoHeader}>
@@ -265,8 +295,7 @@ export default function HomeScreen() {
       </ScreenContainer>
     </View>
   );
-}
-
+};
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -361,12 +390,106 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textAlign: 'center',
   },
-  chipScroll: {
+
+  /* Live Market Rates Section Header */
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  titleWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  sectionTitle: {
+    ...typography.heading2,
+    fontSize: 18,
+  },
+  livePulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#34A853',
+  },
+  viewAllAction: {
+    ...typography.caption,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.primary,
+  },
+
+  /* Live Market Rates Card (Matching User Screenshot) */
+  ratesCard: {
+    padding: 0,
+    overflow: 'hidden',
     marginBottom: spacing.lg,
+    borderRadius: radius.lg,
   },
-  chip: {
-    marginRight: spacing.sm,
+  rateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
   },
+  rateBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  rateInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  rateName: {
+    ...typography.heading3,
+    fontSize: 15,
+    marginBottom: 2,
+  },
+  rateUnit: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  rateRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  ratePrice: {
+    ...typography.heading3,
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    color: colors.textPrimary,
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    gap: 2,
+  },
+  badgePositive: {
+    backgroundColor: '#E6F4EA',
+  },
+  badgeNegative: {
+    backgroundColor: '#FCE8E6',
+  },
+  trendText: {
+    ...typography.caption,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+  },
+  textPositive: {
+    color: '#137333',
+  },
+  textNegative: {
+    color: '#C5221F',
+  },
+
+  /* Featured Products Card */
   productCard: {
     marginBottom: spacing.md,
   },
@@ -414,6 +537,61 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
+
+  /* Industry News Small Cards */
+  newsSmallCard: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  newsSmallHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  newsDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  newsTitle: {
+    ...typography.heading3,
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  newsSummary: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: spacing.sm,
+  },
+  newsSmallFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  readTimeText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  readLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  readLinkText: {
+    ...typography.caption,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.primary,
+    fontSize: 11,
+  },
+
   infoCard: {
     backgroundColor: colors.primaryLight,
     marginBottom: spacing.lg,
