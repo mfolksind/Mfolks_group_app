@@ -26,8 +26,13 @@ export function AppBar({
   const router = useRouter();
 
   const handleBack = () => {
-    if (onBack) onBack();
-    else if (router.canGoBack()) router.back();
+    if (onBack) {
+      onBack();
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/(tabs)/home');
+    }
   };
 
   return (

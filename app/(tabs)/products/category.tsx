@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { AppBar, Card, StatusTag, ErrorState, EmptyState } from '@/components/ui';
 import { getActiveCategories } from '@/api/categories.api';
@@ -16,31 +16,38 @@ export default function CategoryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchCategories = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const response = await getActiveCategories();
+      const response = await getActiveCategories();
 
-        if (response.success && response.data) {
-          setCategories(response.data);
-        } else {
-          setError(response.message || 'Failed to load categories');
-          setCategories([]);
-        }
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        setError('Failed to load categories');
+      if (response.success && response.data) {
+        const categoryList = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.data)
+            ? (response.data as any).data
+            : [];
+        setCategories(categoryList);
+      } else {
+        setError(response.message || 'Failed to load categories');
         setCategories([]);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchCategories();
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      setError('Failed to load categories');
+      setCategories([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCategories();
+    }, [fetchCategories]),
+  );
 
   const handleCategoryPress = (categoryId: string, categoryName: string) => {
     router.push({
@@ -77,7 +84,7 @@ export default function CategoryScreen() {
       <AppBar
         title="Category"
         subtitle={buyingType === 'domestic' ? 'Domestic Buying' : 'International Buying'}
-        showBack
+        showBack={router.canGoBack()}
       />
 
       <ScreenContainer padded>
@@ -90,19 +97,7 @@ export default function CategoryScreen() {
           <ErrorState
             title="Failed to Load Categories"
             message={error}
-            onRetry={() => {
-              setLoading(true);
-              setError(null);
-              // Trigger fetch again
-              getActiveCategories().then((response) => {
-                if (response.success && response.data) {
-                  setCategories(response.data);
-                } else {
-                  setError(response.message || 'Failed to load categories');
-                }
-                setLoading(false);
-              });
-            }}
+            onRetry={fetchCategories}
           />
         ) : categories.length === 0 ? (
           <EmptyState
@@ -184,3 +179,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 });
+

@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import React from 'react';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { AppBar, Card, ErrorState, EmptyState } from '@/components/ui';
@@ -24,7 +24,12 @@ export default function FamilyScreen() {
       const response = await getActiveCategories();
 
       if (response.success && response.data) {
-        setCategories(response.data);
+        const categoryList = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.data)
+            ? (response.data as any).data
+            : [];
+        setCategories(categoryList);
       } else {
         setError(response.message || 'Failed to load categories');
         setCategories([]);
@@ -46,7 +51,7 @@ export default function FamilyScreen() {
 
   const handleCategoryPress = (categoryId: string, categoryName: string) => {
     router.push({
-      pathname: 'products/list',
+      pathname: '/products/list',
       params: {
         categoryId,
         categoryName,
@@ -79,7 +84,7 @@ export default function FamilyScreen() {
 
   return (
     <View style={styles.container}>
-      <AppBar title="Product Categories" showBack />
+      <AppBar title="Product Categories" showBack={router.canGoBack()} />
 
       <ScreenContainer padded>
         {loading ? (
@@ -91,9 +96,7 @@ export default function FamilyScreen() {
           <ErrorState
             title="Failed to Load Categories"
             message={error}
-            onRetry={() => {
-              fetchCategories();
-            }}
+            onRetry={fetchCategories}
           />
         ) : categories.length === 0 ? (
           <EmptyState
@@ -179,3 +182,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 });
+
