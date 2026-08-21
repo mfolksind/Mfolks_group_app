@@ -49,7 +49,7 @@ export default function OrderHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
   orderCard: { marginBottom: spacing.md },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   orderNo: { ...typography.bodyMedium, fontFamily: 'Inter_700Bold' },

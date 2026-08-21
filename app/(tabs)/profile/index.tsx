@@ -82,7 +82,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
   profileCard: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.lg },
   avatar: {
     width: 80,

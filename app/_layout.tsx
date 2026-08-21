@@ -4,6 +4,7 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '@/context/AuthContext';
+import { CartProvider } from '@/context/CartContext';
 import { colors } from '@/design-system';
 import { View, ActivityIndicator } from 'react-native';
 
@@ -27,15 +28,18 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="orders/[orderId]" />
-            <Stack.Screen name="order-success" options={{ gestureEnabled: false }} />
-          </Stack>
+          <CartProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="cart" />
+              <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="orders/[orderId]" />
+              <Stack.Screen name="order-success" options={{ gestureEnabled: false }} />
+            </Stack>
+          </CartProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

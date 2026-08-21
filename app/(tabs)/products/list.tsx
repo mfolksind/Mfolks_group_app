@@ -91,17 +91,16 @@ export default function ProductListScreen() {
   };
 
   const renderProductCard = ({ item }: { item: Variant }) => (
-    <Pressable key={item._id} onPress={() => handleProductPress(item._id)}>
+    <View style={styles.gridItemHalf}>
       <ProductCard variant={item} />
-    </Pressable>
+    </View>
   );
 
   const renderLoadingSkeletons = () => (
-    <>
-      <Skeleton height={200} style={{ marginBottom: spacing.md }} />
-      <Skeleton height={200} style={{ marginBottom: spacing.md }} />
-      <Skeleton height={200} style={{ marginBottom: spacing.md }} />
-    </>
+    <View style={styles.columnWrapper}>
+      <Skeleton height={180} style={{ width: '48.5%', borderRadius: 14 }} />
+      <Skeleton height={180} style={{ width: '48.5%', borderRadius: 14 }} />
+    </View>
   );
 
   return (
@@ -110,6 +109,7 @@ export default function ProductListScreen() {
         title="Products"
         subtitle={`${categoryName ?? 'Category'} · Live Rates`}
         showBack
+        showCart
       />
 
       <ScreenContainer padded>
@@ -148,8 +148,9 @@ export default function ProductListScreen() {
               data={filteredVariants}
               renderItem={renderProductCard}
               keyExtractor={(item) => item._id}
+              numColumns={2}
+              columnWrapperStyle={styles.columnWrapper}
               scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
             />
           </>
         )}
@@ -162,14 +163,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 30,
   },
   loadingContainer: {
     paddingTop: spacing.md,
   },
   count: {
     ...typography.caption,
-    marginBottom: spacing.md,
-    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  gridItemHalf: {
+    width: '48.5%',
   },
 });

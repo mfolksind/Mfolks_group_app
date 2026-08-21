@@ -72,7 +72,7 @@ export default function OrdersScreen() {
   if (!user) {
     return (
       <View style={styles.container}>
-        <AppBar title="Orders" subtitle="Order History" />
+        <AppBar title="Orders" subtitle="Order History" showCart />
         <ScreenContainer padded>
           <EmptyState
             icon="receipt-outline"
@@ -170,7 +170,7 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

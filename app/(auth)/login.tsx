@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
@@ -39,8 +39,12 @@ export default function LoginScreen() {
         style={styles.flex}
       >
         <View style={styles.header}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="hardware-chip" size={36} color={colors.primary} />
+          <View style={styles.logoHeaderContainer}>
+            <Image
+              source={require('../../assets/Mfolks_main - Copy.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to your enterprise account</Text>
@@ -101,14 +105,16 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
   },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.surface,
+  logoHeaderContainer: {
+    width: 180,
+    height: 54,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   title: {
     ...typography.heading1,

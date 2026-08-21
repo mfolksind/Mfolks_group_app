@@ -1,23 +1,21 @@
 {
   "expo": {
-    "name": "MetalTrade Pro",
-    "slug": "manufacturing-marketplace-app",
-    "version": "1.0.0",
+    "name": "Mfolks",
+    "slug": "mfolks-app",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "scheme": "metaltrade",
+    "scheme": "mfolks",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.metaltrade.marketplace"
+      "bundleIdentifier": "com.mfolks.mobile"
     },
     "android": {
-      "package": "com.metaltrade.marketplace",
+      "package": "com.mfolks.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#57C5CC",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true
     },
@@ -27,6 +25,12 @@
     "plugins": [
       "expo-router",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "99669480-79ea-46aa-af60-29bf92b90ca3"
+      }
+    }
   }
 }

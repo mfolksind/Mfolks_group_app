@@ -48,7 +48,7 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

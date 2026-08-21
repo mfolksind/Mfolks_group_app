@@ -62,7 +62,7 @@ export default function BuyProductScreen() {
   if (!user) {
     return (
       <View style={styles.container}>
-        <AppBar title="Buy Product" showBack />
+        <AppBar title="Buy Product" showBack showCart />
         <ScreenContainer padded>
           <ErrorState
             title="Not Logged In"
@@ -76,7 +76,7 @@ export default function BuyProductScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <AppBar title="Buy Product" showBack />
+        <AppBar title="Buy Product" showBack showCart />
         <ScreenContainer padded>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -90,7 +90,7 @@ export default function BuyProductScreen() {
   if (error || !variant) {
     return (
       <View style={styles.container}>
-        <AppBar title="Buy Product" showBack />
+        <AppBar title="Buy Product" showBack showCart />
         <ScreenContainer padded>
           <ErrorState
             title={error ? 'Failed to Load Product' : 'Product Not Found'}
@@ -303,7 +303,7 @@ export default function BuyProductScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

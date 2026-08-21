@@ -1,6 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Image,
+  ActivityIndicator,
+  Animated,
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
@@ -8,10 +16,14 @@ import {
   SearchBar,
   SectionHeader,
   Card,
-  Chip,
   Badge,
+  HeroBannerCarousel,
+  Snackbar,
+  ProductCard,
 } from '@/components/ui';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
 import { getFeaturedVariants } from '@/api/products.api';
 import { Variant } from '@/types/backend';
 import { liveRatesData, industryNewsData } from '@/data/liveRatesAndNews';
@@ -19,12 +31,54 @@ import { colors, elevation, radius, spacing, typography } from '@/design-system'
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { getItemCount, addToCart } = useCart();
+  const cartCount = getItemCount();
+
   const [search, setSearch] = useState('');
   const [featuredProducts, setFeaturedProducts] = useState<Variant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Scroll-driven logo collapse/expand animation
+  const isExpanded = useRef(true);
+  const logoWidthAnim = useRef(new Animated.Value(1)).current; // 1 = full logo (140px), 0 = ball icon only (36px)
+
+  const handleScroll = (e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+
+    if (y > 35 && isExpanded.current) {
+
+      isExpanded.current = false;
+
+      Animated.spring(logoWidthAnim, {
+        toValue: 0,
+        friction: 11,
+        tension: 32,
+        useNativeDriver: false,
+      }).start();
+
+    } else if (y <= 6 && !isExpanded.current) {
+
+      isExpanded.current = true;
+
+      Animated.spring(logoWidthAnim, {
+        toValue: 1,
+        friction: 11,
+        tension: 32,
+        useNativeDriver: false,
+      }).start();
+
+    }
+  };
+
+  const logoContainerWidth = logoWidthAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [36, 140],
+  });
 
   const fetchHomeData = async () => {
     try {
@@ -52,7 +106,7 @@ export default function HomeScreen() {
   };
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       fetchHomeData();
     }, []),
   );
@@ -66,58 +120,82 @@ export default function HomeScreen() {
     return `₹${price.toLocaleString('en-IN')}`;
   };
 
+  const handleAddToCart = (product: Variant, e: any) => {
+    e.stopPropagation();
+    const res = addToCart(product, 1);
+    setToastMessage(res.message);
+  };
+
   // Top 5 live rates for home page
   const topLiveRates = liveRatesData.slice(0, 5);
   // Top 2 industry news for home page
   const topNews = industryNewsData.slice(0, 2);
 
+  // Filter featured products by search text
+  const displayedProducts = featuredProducts.filter((product) => {
+    const name = (product.variantName || product.product?.name || '').toLowerCase();
+    return search ? name.includes(search.toLowerCase()) : true;
+  });
+
   return (
     <View style={styles.container}>
-      <View style={styles.topBar}>
-        <View style={styles.logoContainer}>
+      {/* Scroll-Animated Executive Header */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 12) }]}>
+        <Animated.View style={[styles.logoContainer, { width: logoContainerWidth }]}>
           <Image
             source={require('../../assets/Mfolks_main - Copy.png')}
             style={styles.logo}
             resizeMode="contain"
           />
+        </Animated.View>
+
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/cart')}
+            style={({ pressed }) => [styles.headerIconButton, pressed && styles.btnPressed]}
+            hitSlop={8}
+          >
+            <Ionicons name="cart-outline" size={22} color={colors.textPrimary} />
+            {cartCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>
+                  {cartCount > 99 ? '99+' : cartCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            style={({ pressed }) => [styles.headerIconButton, pressed && styles.btnPressed]}
+            hitSlop={8}
+          >
+            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => router.push('/notifications')}
-          style={styles.notifButton}
-        >
-          <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
-        </Pressable>
       </View>
 
-      <ScreenContainer onRefresh={onRefresh} refreshing={refreshing} padded>
+      <ScreenContainer
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        padded
+      >
         <SearchBar
           value={search}
           onChangeText={setSearch}
           placeholder="Search products..."
         />
 
-        {/* Hero Banner */}
-        <Card style={styles.heroBanner} padding={0}>
-          <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>Industrial Metal Marketplace</Text>
-            <Text style={styles.heroSubtitle}>
-              Access quality metal products for domestic & international markets
-            </Text>
-            <Pressable
-              style={styles.heroCta}
-              onPress={() => router.push('/(tabs)/products')}
-            >
-              <Text style={styles.heroCtaText}>Browse Products</Text>
-              <Ionicons name="arrow-forward" size={16} color={colors.textInverse} />
-            </Pressable>
-          </View>
-        </Card>
+        {/* Hero Banner Carousel */}
+        <HeroBannerCarousel />
 
         {/* Quick Actions */}
         <SectionHeader title="Quick Actions" />
         <View style={styles.quickActions}>
           {[
-            { icon: 'globe-outline' as const, label: 'Calculator', route: '/live-rates' },
+            { icon: 'globe-outline' as const, label: 'Industry Articles', route: '/industry-news' },
             { icon: 'trending-up-outline' as const, label: 'Live Rates', route: '/live-rates' },
             { icon: 'cube-outline' as const, label: 'Categories', route: '/(tabs)/products' },
             { icon: 'receipt-outline' as const, label: 'Orders', route: '/(tabs)/orders' },
@@ -196,53 +274,14 @@ export default function HomeScreen() {
               actionLabel="See All"
               onAction={() => router.push('/(tabs)/products')}
             />
-            {featuredProducts.length > 0 ? (
-              featuredProducts.slice(0, 4).map((product) => (
-                <Pressable
-                  key={product._id}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/products/[productId]',
-                      params: { productId: product._id },
-                    })
-                  }
-                >
-                  <Card style={styles.productCard}>
-                    <View style={styles.productHeader}>
-                      <View style={styles.productInfo}>
-                        <Text style={styles.productName} numberOfLines={1}>
-                          {product.variantName || product.product?.name}
-                        </Text>
-                        {product.product?.brand && (
-                          <Text style={styles.productBrand}>{product.product.brand}</Text>
-                        )}
-                      </View>
-                      {product.stock > 0 && (
-                        <View style={styles.inStock}>
-                          <Text style={styles.inStockText}>In Stock</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.productDetails}>
-                      <Text style={styles.productPrice}>
-                        {formatPrice(product.discountPrice || product.price)}
-                      </Text>
-                      {product.discountPrice && product.discountPrice < product.price && (
-                        <Text style={styles.originalPrice}>
-                          {formatPrice(product.price)}
-                        </Text>
-                      )}
-                    </View>
-
-                    {product.shortDescription && (
-                      <Text style={styles.productDescription} numberOfLines={1}>
-                        {product.shortDescription}
-                      </Text>
-                    )}
-                  </Card>
-                </Pressable>
-              ))
+            {displayedProducts.length > 0 ? (
+              <View style={styles.productsTwoColumnGrid}>
+                {displayedProducts.slice(0, 8).map((product) => (
+                  <View key={product._id} style={styles.gridItemHalf}>
+                    <ProductCard variant={product} />
+                  </View>
+                ))}
+              </View>
             ) : (
               <Text style={styles.emptyText}>No featured products available</Text>
             )}
@@ -262,7 +301,7 @@ export default function HomeScreen() {
           >
             <Card style={styles.newsSmallCard}>
               <View style={styles.newsSmallHeader}>
-                <Badge label={article.category} variant="info" />
+                <Badge count={1} />
                 <Text style={styles.newsDate}>{article.date}</Text>
               </View>
               <Text style={styles.newsTitle} numberOfLines={2}>
@@ -293,9 +332,20 @@ export default function HomeScreen() {
           </Text>
         </Card>
       </ScreenContainer>
+
+      {/* Snackbar Toast */}
+      {toastMessage && (
+        <Snackbar
+          visible={!!toastMessage}
+          message={toastMessage}
+          variant="success"
+          onDismiss={() => setToastMessage(null)}
+        />
+      )}
     </View>
   );
-};
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -305,68 +355,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    paddingTop: 30,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md + 2,
+    paddingBottom: spacing.sm + 2,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
     ...elevation.sm,
   },
   logoContainer: {
-    flex: 1,
-    height: 30,
+    height: 55,
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
   logo: {
-    width: '100%',
+    width: 140,
     height: '100%',
   },
-  notifButton: {
-    padding: spacing.sm,
-  },
-  loadingContainer: {
-    paddingVertical: spacing.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: spacing.md,
-  },
-  heroBanner: {
-    marginBottom: spacing.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.primary,
-    marginTop: spacing.md,
-  },
-  heroContent: {
-    padding: spacing.lg,
-    marginTop: spacing.md,
-  },
-  heroTitle: {
-    ...typography.heading2,
-    color: colors.textInverse,
-    marginBottom: spacing.sm,
-  },
-  heroSubtitle: {
-    ...typography.body,
-    color: colors.textInverse,
-    opacity: 0.9,
-    marginBottom: spacing.md,
-  },
-  heroCta: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.textInverse,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    alignSelf: 'flex-start',
-    gap: spacing.sm,
+    gap: 10,
   },
-  heroCtaText: {
-    ...typography.bodyMedium,
-    color: colors.primary,
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  btnPressed: {
+    opacity: 0.8,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   quickActions: {
     flexDirection: 'row',
@@ -390,8 +431,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textAlign: 'center',
   },
-
-  /* Live Market Rates Section Header */
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -419,8 +458,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: colors.primary,
   },
-
-  /* Live Market Rates Card (Matching User Screenshot) */
   ratesCard: {
     padding: 0,
     overflow: 'hidden',
@@ -431,9 +468,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    padding: spacing.md,
   },
   rateBorder: {
     borderBottomWidth: 1,
@@ -441,35 +476,31 @@ const styles = StyleSheet.create({
   },
   rateInfo: {
     flex: 1,
-    marginRight: spacing.md,
   },
   rateName: {
-    ...typography.heading3,
-    fontSize: 15,
-    marginBottom: 2,
+    ...typography.bodyMedium,
   },
   rateUnit: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontSize: 12,
+    marginTop: 2,
   },
   rateRight: {
     alignItems: 'flex-end',
-    gap: 4,
   },
   ratePrice: {
-    ...typography.heading3,
-    fontSize: 16,
+    ...typography.bodyMedium,
     fontFamily: 'Inter_700Bold',
     color: colors.textPrimary,
   },
   trendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
     gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
   },
   badgePositive: {
     backgroundColor: '#E6F4EA',
@@ -488,57 +519,239 @@ const styles = StyleSheet.create({
   textNegative: {
     color: '#C5221F',
   },
-
-  /* Featured Products Card */
-  productCard: {
-    marginBottom: spacing.md,
+  loadingContainer: {
+    paddingVertical: spacing.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  productHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-  },
-  productInfo: {
-    flex: 1,
-  },
-  productName: {
-    ...typography.heading3,
-    marginBottom: spacing.xs,
-  },
-  productBrand: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  inStock: {
-    backgroundColor: colors.success,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-  },
-  inStockText: {
-    ...typography.caption,
-    color: colors.textInverse,
-    fontSize: 10,
-  },
-  productDetails: {
-    marginBottom: spacing.sm,
-  },
-  productPrice: {
-    ...typography.heading3,
-    color: colors.primary,
-  },
-  originalPrice: {
-    ...typography.caption,
-    textDecorationLine: 'line-through',
-    color: colors.textSecondary,
-  },
-  productDescription: {
+  emptyText: {
     ...typography.body,
     color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 
-  /* Industry News Small Cards */
+  productsTwoColumnGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  gridItemHalf: {
+    width: '48.5%',
+  },
+  luxuryProductCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    ...elevation.md,
+  },
+  cardPressed: {
+    opacity: 0.95,
+    transform: [{ scale: 0.985 }],
+  },
+  cardImageFrame: {
+    height: 165,
+    backgroundColor: '#F8FAFC',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardImageFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2FF',
+  },
+  fallbackCategoryText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 1.5,
+    marginTop: 6,
+  },
+  overlayTopLeft: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+  },
+  verifiedGlassBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 20,
+    elevation: 2,
+  },
+  verifiedGlassText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  overlayTopRight: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+  },
+  discountBadgeTag: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  discountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  overlayBottomRight: {
+    position: 'absolute',
+    bottom: 10,
+    right: 12,
+  },
+  stockPillGreen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  stockPillGreenText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  stockPillRed: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  stockPillRedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  cardBody: {
+    padding: spacing.md + 2,
+  },
+  brandSkuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  brandPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  brandPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  skuText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  luxuryProductTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    fontFamily: 'Inter_700Bold',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  specsPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.md,
+  },
+  specMiniPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  specMiniText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  cardPriceActionFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  priceBlockGroup: {
+    flex: 1,
+  },
+  mainPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  luxuryMainPrice: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: colors.primary,
+    fontFamily: 'Inter_700Bold',
+  },
+  priceUnitLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  luxuryStrikethrough: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textDecorationLine: 'line-through',
+    marginTop: 1,
+  },
+  luxuryCartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.md,
+    ...elevation.sm,
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  luxuryCartBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+  },
+
+  /* News Section & Info Card */
   newsSmallCard: {
     marginBottom: spacing.md,
     backgroundColor: colors.surface,
@@ -587,190 +800,25 @@ const styles = StyleSheet.create({
   },
   readLinkText: {
     ...typography.caption,
-    fontFamily: 'Inter_600SemiBold',
     color: colors.primary,
-    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
   },
-
   infoCard: {
-    backgroundColor: colors.primaryLight,
     marginBottom: spacing.lg,
+    backgroundColor: colors.primaryLight,
   },
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
   },
   infoTitle: {
-    ...typography.bodyMedium,
-    color: colors.primary,
+    ...typography.heading3,
+    color: colors.primaryDark,
   },
   infoText: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
   },
 });
-//   },
-//   greeting: {
-//     ...typography.caption,
-//   },
-//   logoContainer: {
-//   justifyContent: 'center',
-// },
-
-// logo: {
-//   width: 120,
-//   height: 50,
-// },
-//   companyName: {
-//     ...typography.heading3,
-//   },
-//   notifButton: {
-//     width: 48,
-//     height: 48,
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     position: 'relative',
-//   },
-//   heroBanner: {
-//     marginTop: spacing.md,
-//     overflow: 'hidden',
-//     backgroundColor: colors.primary,
-//   },
-//   heroContent: {
-//     padding: spacing.lg,
-//   },
-//   heroTitle: {
-//     ...typography.heading1,
-//     color: colors.textInverse,
-//     fontSize: 22,
-//   },
-//   heroSubtitle: {
-//     ...typography.body,
-//     color: 'rgba(255,255,255,0.85)',
-//     marginTop: spacing.sm,
-//     marginBottom: spacing.md,
-//   },
-//   heroCta: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     alignSelf: 'flex-start',
-//     backgroundColor: 'rgba(255,255,255,0.2)',
-//     paddingHorizontal: spacing.md,
-//     paddingVertical: spacing.sm,
-//     borderRadius: radius.full,
-//     gap: spacing.xs,
-//   },
-//   heroCtaText: {
-//     ...typography.button,
-//     color: colors.textInverse,
-//   },
-//   quickActions: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     marginBottom: spacing.sm,
-//   },
-//   quickAction: {
-//     alignItems: 'center',
-//     width: '23%',
-//   },
-//   quickActionIcon: {
-//     width: 52,
-//     height: 52,
-//     borderRadius: radius.md,
-//     backgroundColor: colors.primaryLight,
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     marginBottom: spacing.xs,
-//   },
-//   quickActionLabel: {
-//     ...typography.caption,
-//     textAlign: 'center',
-//     fontSize: 11,
-//   },
-//   chipScroll: {
-//     marginBottom: spacing.sm,
-//   },
-//   chip: {
-//     marginRight: spacing.sm,
-//   },
-//   ratesCard: {
-//     padding: 0,
-//     overflow: 'hidden',
-//   },
-//   rateRow: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     padding: spacing.md,
-//   },
-//   rateBorder: {
-//     borderBottomWidth: 1,
-//     borderBottomColor: colors.divider,
-//   },
-//   rateName: {
-//     ...typography.bodyMedium,
-//   },
-//   rateCategory: {
-//     ...typography.caption,
-//     marginTop: 2,
-//   },
-//   rateRight: {
-//     alignItems: 'flex-end',
-//   },
-//   rateValue: {
-//     ...typography.bodyMedium,
-//     fontFamily: 'Inter_700Bold',
-//     color: colors.secondary,
-//   },
-//   rateChange: {
-//     ...typography.caption,
-//     fontFamily: 'Inter_600SemiBold',
-//     marginTop: 2,
-//   },
-//   announcementCard: {
-//     marginBottom: spacing.sm,
-//   },
-//   announcementHeader: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     marginBottom: spacing.sm,
-//   },
-//   announcementDate: {
-//     ...typography.caption,
-//   },
-//   announcementTitle: {
-//     ...typography.heading3,
-//     marginBottom: spacing.xs,
-//   },
-//   announcementMessage: {
-//     ...typography.body,
-//     color: colors.textSecondary,
-//   },
-//   recentCard: {
-//     width: 280,
-//     marginRight: spacing.md,
-//   },
-//   newsCard: {
-//     marginBottom: spacing.sm,
-//   },
-//   newsHeader: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     marginBottom: spacing.sm,
-//   },
-//   newsDate: {
-//     ...typography.caption,
-//   },
-//   newsTitle: {
-//     ...typography.heading3,
-//     marginBottom: spacing.xs,
-//   },
-//   newsSummary: {
-//     ...typography.body,
-//     color: colors.textSecondary,
-//   },
-// });

@@ -60,7 +60,7 @@ export default function SupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
   heading: { ...typography.heading1, marginTop: spacing.md },
   description: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.lg, marginTop: spacing.sm },
   supportCard: { marginBottom: spacing.md },

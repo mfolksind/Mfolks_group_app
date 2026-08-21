@@ -15,3 +15,5 @@ export { Skeleton, ProductCardSkeleton, HomeScreenSkeleton } from './Skeleton';
 export { Dialog } from './Dialog';
 export { Snackbar } from './Snackbar';
 export { SectionHeader } from './SectionHeader';
+export { HeroBannerCarousel } from './HeroBannerCarousel';
+

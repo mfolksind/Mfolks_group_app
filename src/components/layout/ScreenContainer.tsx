@@ -19,6 +19,8 @@ interface ScreenContainerProps {
   onRefresh?: () => void;
   style?: ViewStyle;
   backgroundColor?: string;
+  onScroll?: (event: any) => void;
+  scrollEventThrottle?: number;
 }
 
 export function ScreenContainer({
@@ -29,6 +31,8 @@ export function ScreenContainer({
   onRefresh,
   style,
   backgroundColor = colors.background,
+  onScroll,
+  scrollEventThrottle = 16,
 }: ScreenContainerProps) {
 
   const content = (
@@ -55,6 +59,8 @@ export function ScreenContainer({
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          onScroll={onScroll}
+          scrollEventThrottle={scrollEventThrottle}
           refreshControl={
             onRefresh ? (
               <RefreshControl
@@ -81,6 +87,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 90,
   },
 
   content: {

@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 40,
+
   },
   filterScroll: {
     marginBottom: spacing.md,

@@ -1,12 +1,18 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  FlatList,
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
-import { AppBar, Card, ErrorState, EmptyState } from '@/components/ui';
+import { AppBar, SearchBar, ErrorState, EmptyState, Skeleton } from '@/components/ui';
 import { getActiveCategories } from '@/api/categories.api';
 import { Category } from '@/types/backend';
-import { colors, radius, spacing, typography } from '@/design-system';
+import { colors, radius, spacing, typography, elevation } from '@/design-system';
 
 export default function ProductsIndexScreen() {
   const router = useRouter();
@@ -14,6 +20,7 @@ export default function ProductsIndexScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -58,38 +65,93 @@ export default function ProductsIndexScreen() {
     });
   };
 
-  const renderCategoryCard = ({ item }: { item: Category }) => (
-    <Pressable onPress={() => handleCategoryPress(item._id, item.name)}>
-      <Card style={styles.categoryCard}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="cube-outline" size={28} color={colors.primary} />
+  // Icon chooser based on Category Name
+  const getCategoryIcon = (name: string) => {
+    const lower = name.toLowerCase();
+    if (lower.includes('steel') || lower.includes('tmt') || lower.includes('rebar')) {
+      return 'cube-outline' as const;
+    }
+    if (lower.includes('coil') || lower.includes('sheet') || lower.includes('plate')) {
+      return 'layers-outline' as const;
+    }
+    if (lower.includes('alum') || lower.includes('ingot')) {
+      return 'shield-outline' as const;
+    }
+    if (lower.includes('copper') || lower.includes('wire') || lower.includes('brass')) {
+      return 'flash-outline' as const;
+    }
+    if (lower.includes('pipe') || lower.includes('tube') || lower.includes('hollow')) {
+      return 'analytics-outline' as const;
+    }
+    return 'grid-outline' as const;
+  };
+
+  const filteredCategories = useMemo(() => {
+    return categories.filter((cat) => {
+      return search.trim() === '' || cat.name.toLowerCase().includes(search.toLowerCase());
+    });
+  }, [categories, search]);
+
+  const renderCategoryCard = ({ item }: { item: Category }) => {
+    const iconName = getCategoryIcon(item.name);
+
+    return (
+      <Pressable
+        onPress={() => handleCategoryPress(item._id, item.name)}
+        style={({ pressed }) => [
+          styles.simpleCategoryCard,
+          pressed && styles.cardPressed,
+        ]}
+      >
+        <View style={styles.iconCircle}>
+          <Ionicons name={iconName} size={22} color={colors.primary} />
         </View>
-        <View style={styles.categoryContent}>
-          <Text style={styles.categoryName}>{item.name}</Text>
-          {item.description && (
-            <Text style={styles.categoryDescription} numberOfLines={1}>
+
+        <View style={styles.cardInfo}>
+          <Text style={styles.categoryTitle} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.description ? (
+            <Text style={styles.categorySubtitle} numberOfLines={1}>
               {item.description}
+            </Text>
+          ) : (
+            <Text style={styles.categorySubtitle} numberOfLines={1}>
+              Browse verified product variants
             </Text>
           )}
         </View>
-        <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-      </Card>
-    </Pressable>
-  );
+
+        <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+      </Pressable>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <AppBar
         title="Categories"
-        subtitle="Browse Metal Categories"
+        subtitle="Browse All Metal Categories"
         showBack={router.canGoBack()}
+        showCart
       />
 
       <ScreenContainer padded>
+        {/* Simple Search Bar */}
+        <View style={styles.searchContainer}>
+          <SearchBar
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search categories..."
+          />
+        </View>
+
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading categories...</Text>
+          <View style={styles.skeletonContainer}>
+            <Skeleton height={68} style={{ borderRadius: 12, marginBottom: spacing.sm }} />
+            <Skeleton height={68} style={{ borderRadius: 12, marginBottom: spacing.sm }} />
+            <Skeleton height={68} style={{ borderRadius: 12, marginBottom: spacing.sm }} />
+            <Skeleton height={68} style={{ borderRadius: 12, marginBottom: spacing.sm }} />
           </View>
         ) : error ? (
           <ErrorState
@@ -97,25 +159,17 @@ export default function ProductsIndexScreen() {
             message={error}
             onRetry={fetchCategories}
           />
-        ) : categories.length === 0 ? (
+        ) : filteredCategories.length === 0 ? (
           <EmptyState
-            title="No Categories Available"
-            message="No product categories are currently available."
+            title="No Categories Found"
+            message={search.trim() !== '' ? `No categories match "${search}".` : 'No product categories available.'}
           />
         ) : (
           <FlatList
-            data={categories}
+            data={filteredCategories}
             renderItem={renderCategoryCard}
             keyExtractor={(item) => item._id}
             scrollEnabled={false}
-            ListHeaderComponent={
-              <>
-                <Text style={styles.heading}>Select Category</Text>
-                <Text style={styles.description}>
-                  Choose a product category to browse available products.
-                </Text>
-              </>
-            }
             contentContainerStyle={styles.listContent}
           />
         )}
@@ -128,56 +182,53 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 30,
+  },
+  searchContainer: {
+    marginBottom: spacing.md,
+  },
+  skeletonContainer: {
+    marginTop: spacing.xs,
   },
   listContent: {
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 300,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-  },
-  heading: {
-    ...typography.heading1,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  description: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  categoryCard: {
+  simpleCategoryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md - 2,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     gap: spacing.md,
+    ...elevation.sm,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.988 }],
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EEF2FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  categoryContent: {
+  cardInfo: {
     flex: 1,
   },
-  categoryName: {
-    ...typography.heading3,
-    marginBottom: spacing.xs,
+  categoryTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    fontFamily: 'Inter_700Bold',
   },
-  categoryDescription: {
-    ...typography.caption,
+  categorySubtitle: {
+    fontSize: 12,
     color: colors.textSecondary,
+    marginTop: 2,
   },
 });
-
