@@ -6,11 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
 import { colors, elevation, layout, radius, spacing, typography } from '@/design-system';
 
+import { useNotifications } from '@/hooks/useNotifications';
+
 interface AppBarProps {
   title: string;
   subtitle?: string;
   showBack?: boolean;
   showCart?: boolean;
+  showSupport?: boolean;
+  showNotification?: boolean;
   onBack?: () => void;
   rightAction?: React.ReactNode;
   transparent?: boolean;
@@ -22,6 +26,8 @@ export function AppBar({
   subtitle,
   showBack = false,
   showCart = false,
+  showSupport = false,
+  showNotification = true,
   onBack,
   rightAction,
   transparent = false,
@@ -31,6 +37,7 @@ export function AppBar({
   const insets = useSafeAreaInsets();
   const { getItemCount } = useCart();
   const itemCount = getItemCount();
+  const { unreadCount } = useNotifications();
 
   const handleBack = () => {
     if (onBack) {
@@ -41,6 +48,9 @@ export function AppBar({
       router.push('/(tabs)/home');
     }
   };
+
+  const shouldShowSupport = showSupport || showCart;
+  const shouldShowNotification = showNotification || showCart;
 
   return (
     <View
@@ -77,22 +87,51 @@ export function AppBar({
       </View>
       {rightAction ? (
         <View style={styles.right}>{rightAction}</View>
-      ) : showCart ? (
+      ) : (showCart || shouldShowSupport || shouldShowNotification) ? (
         <View style={styles.right}>
-          <Pressable
-            onPress={() => router.push('/cart')}
-            style={styles.cartButton}
-            hitSlop={8}
-          >
-            <Ionicons name="cart-outline" size={24} color={colors.textPrimary} />
-            {itemCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {itemCount > 99 ? '99+' : itemCount}
-                </Text>
-              </View>
-            )}
-          </Pressable>
+          {shouldShowNotification && (
+            <Pressable
+              onPress={() => router.push('/notifications')}
+              style={({ pressed }) => [styles.cartButton, pressed && styles.pressed]}
+              hitSlop={8}
+              accessibilityLabel="Notifications"
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          )}
+          {shouldShowSupport && (
+            <Pressable
+              onPress={() => router.push('/support')}
+              style={({ pressed }) => [styles.cartButton, pressed && styles.pressed]}
+              hitSlop={8}
+              accessibilityLabel="Support"
+            >
+              <Ionicons name="headset-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
+          )}
+          {showCart && (
+            <Pressable
+              onPress={() => router.push('/cart')}
+              style={styles.cartButton}
+              hitSlop={8}
+            >
+              <Ionicons name="cart-outline" size={24} color={colors.textPrimary} />
+              {itemCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {itemCount > 99 ? '99+' : itemCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          )}
         </View>
       ) : null}
     </View>
@@ -143,6 +182,9 @@ const styles = StyleSheet.create({
   },
   right: {
     marginLeft: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   cartButton: {
     width: layout.minTouchTarget,

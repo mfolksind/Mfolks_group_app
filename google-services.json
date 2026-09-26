@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "981198159300",
+    "project_id": "mfolksnotification",
+    "storage_bucket": "mfolksnotification.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:981198159300:android:6336e427811b19087f3891",
+        "android_client_info": {
+          "package_name": "com.mfolks.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvgCI8zFDy5oQOp5t12tUd5XH_Q_8ROMs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

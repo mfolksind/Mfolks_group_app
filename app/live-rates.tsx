@@ -6,9 +6,11 @@ import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { AppBar, Card, SearchBar, Chip } from '@/components/ui';
 import { liveRatesData, LiveRate } from '@/data/liveRatesAndNews';
 import { colors, radius, spacing, typography } from '@/design-system';
+import { useHardwareBack } from '@/hooks/useHardwareBack';
 
 export default function LiveRatesScreen() {
   const router = useRouter();
+  useHardwareBack('/(tabs)/home');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);

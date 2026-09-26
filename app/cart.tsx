@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,28 +9,63 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
-import { AppBar, Button, Card, Dropdown, EmptyState, ErrorState, Dialog } from '@/components/ui';
+import { AppBar, Button, Card, Dropdown, EmptyState, ErrorState, Dialog, SwipeButton } from '@/components/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { createOrder } from '@/api/orders.api';
+import { getAddresses } from '@/api/addresses.api';
+import { Address } from '@/types/backend';
 import { colors, radius, spacing, typography } from '@/design-system';
+import { useHardwareBack } from '@/hooks/useHardwareBack';
 
 export default function CartScreen() {
   const router = useRouter();
+  useHardwareBack('/(tabs)/home');
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const [swipeKey, setSwipeKey] = useState(0);
+
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      setSwipeKey((prev) => prev + 1);
+    });
+    return unsubscribe;
+  }, [navigation]);
   const { cartItems, updateQuantity, removeFromCart, clearCart, getCartTotals } = useCart();
 
-  const [selectedAddressId, setSelectedAddressId] = useState<string>(
-    user?.addresses?.[0]?._id || user?.addresses?.[0]?.id || ''
-  );
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const fetchAddresses = useCallback(async () => {
+    try {
+      const res = await getAddresses();
+      if (res.success) {
+        const addrList = res.data || [];
+        setAddresses(addrList);
+        const defaultAddr = addrList.find((a) => a.isDefault);
+        if (defaultAddr) {
+          setSelectedAddressId(defaultAddr._id || defaultAddr.id || '');
+        } else if (addrList.length > 0) {
+          setSelectedAddressId(addrList[0]._id || addrList[0].id || '');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading addresses in cart:', err);
+    }
+  }, []);
+
+  // Fetch addresses when checkout page is loaded
+  React.useEffect(() => {
+    fetchAddresses();
+  }, [fetchAddresses]);
 
   const formatPrice = (price: number) => {
     return `₹${price.toLocaleString('en-IN')}`;
@@ -39,11 +74,10 @@ export default function CartScreen() {
   const { subtotal, taxes, grandTotal } = getCartTotals();
 
   // Format delivery addresses for Dropdown options
-  const addressOptions =
-    user?.addresses?.map((addr) => ({
-      label: `${addr.label}: ${addr.line1}, ${addr.city} (${addr.pincode})`,
-      value: addr._id || addr.id || '',
-    })) || [];
+  const addressOptions = addresses.map((addr) => ({
+    label: `${addr.addressType}: ${addr.addressLine1}, ${addr.city} (${addr.postalCode})`,
+    value: addr._id || addr.id || '',
+  }));
 
   const handleCheckout = async () => {
     if (!user) {
@@ -61,48 +95,22 @@ export default function CartScreen() {
       return;
     }
 
-    try {
-      setShowConfirmModal(false);
-      setSubmitting(true);
-      setErrorMsg(null);
+    // Prepare order items
+    // Prepare order items with unit
+    const orderItems = cartItems.map((item) => ({
+      variantId: item.variant._id || '',
+      quantity: item.quantity,
+      unit: item.unit || item.variant.unit || 'piece',
+    }));
 
-      // Prepare order items
-      const orderItems = cartItems.map((item) => {
-        const unitPrice = item.variant.discountPrice || item.variant.price || 0;
-        return {
-          variantId: item.variant._id,
-          quantity: item.quantity,
-          price: item.variant.price,
-          discountPrice: item.variant.discountPrice,
-          subtotal: unitPrice * item.quantity,
-        };
-      });
-
-      const response = await createOrder({
-        items: orderItems,
-        deliveryAddressId: selectedAddressId,
-      });
-
-      if (response.success && response.data) {
-        const newOrder = response.data;
-        clearCart();
-        router.replace({
-          pathname: '/order-success',
-          params: {
-            orderId: newOrder._id,
-            orderNo: newOrder.orderNo || 'ORD-SUCCESS',
-            total: grandTotal.toString(),
-          },
-        });
-      } else {
-        setErrorMsg(response.message || 'Failed to submit order. Please try again.');
-      }
-    } catch (err) {
-      console.error('Error submitting order:', err);
-      setErrorMsg('An unexpected error occurred while placing order.');
-    } finally {
-      setSubmitting(false);
-    }
+    router.push({
+      pathname: '/payment',
+      params: {
+        items: JSON.stringify(orderItems),
+        addressId: selectedAddressId,
+        amount: grandTotal.toString(),
+      },
+    });
   };
 
   if (cartItems.length === 0) {
@@ -138,13 +146,18 @@ export default function CartScreen() {
 
         {/* Cart Items List */}
         <Text style={styles.sectionTitle}>Cart Items</Text>
-        {cartItems.map((item) => {
+        {cartItems.map((item, index) => {
           const variant = item.variant;
-          const unitPrice = variant.discountPrice || variant.price || 0;
+          const itemUnit = item.unit || variant.unit || 'piece';
+          const matchedUnitPriceObj = variant.unitPrices?.find((p) => p.unit === itemUnit);
+          const unitPrice = matchedUnitPriceObj
+            ? (matchedUnitPriceObj.discountPrice ?? matchedUnitPriceObj.price)
+            : (variant.discountPrice || variant.price || 0);
+
           const isMaxStock = item.quantity >= variant.stock;
 
           return (
-            <Card key={variant._id} style={styles.itemCard}>
+            <Card key={`${variant._id}_${itemUnit}_${index}`} style={styles.itemCard}>
               <View style={styles.itemRow}>
                 {variant.thumbnail || variant.images?.[0]?.url ? (
                   <Image
@@ -164,7 +177,7 @@ export default function CartScreen() {
                       {variant.variantName || variant.product?.name}
                     </Text>
                     <Pressable
-                      onPress={() => removeFromCart(variant._id)}
+                      onPress={() => removeFromCart(variant._id, itemUnit)}
                       hitSlop={8}
                       style={styles.removeBtn}
                     >
@@ -172,25 +185,34 @@ export default function CartScreen() {
                     </Pressable>
                   </View>
 
-                  {variant.product?.brand && (
-                    <Text style={styles.itemBrand}>Brand: {variant.product.brand}</Text>
-                  )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 2 }}>
+                    {variant.product?.brand && (
+                      <Text style={styles.itemBrand}>Brand: {variant.product.brand} • </Text>
+                    )}
+                    <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>
+                        Unit: {itemUnit.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.itemSku}>SKU: {variant.sku}</Text>
 
                   <View style={styles.itemFooter}>
-                    <Text style={styles.itemPrice}>{formatPrice(unitPrice)}</Text>
+                    <Text style={styles.itemPrice}>
+                      {formatPrice(unitPrice)} <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '400' }}>/ {itemUnit}</Text>
+                    </Text>
 
                     {/* Quantity Picker */}
                     <View style={styles.qtyContainer}>
                       <Pressable
-                        onPress={() => updateQuantity(variant._id, item.quantity - 1)}
+                        onPress={() => updateQuantity(variant._id, itemUnit, item.quantity - 1)}
                         style={styles.qtyBtn}
                       >
                         <Ionicons name="remove" size={16} color={colors.textPrimary} />
                       </Pressable>
                       <Text style={styles.qtyText}>{item.quantity}</Text>
                       <Pressable
-                        onPress={() => updateQuantity(variant._id, item.quantity + 1)}
+                        onPress={() => updateQuantity(variant._id, itemUnit, item.quantity + 1)}
                         style={[styles.qtyBtn, isMaxStock && styles.qtyBtnDisabled]}
                         disabled={isMaxStock}
                       >
@@ -204,7 +226,7 @@ export default function CartScreen() {
                   </View>
 
                   {isMaxStock && (
-                    <Text style={styles.maxStockText}>Max available stock ({variant.stock}) reached</Text>
+                    <Text style={styles.maxStockText}>Max available stock ({variant.stock} {itemUnit}) reached</Text>
                   )}
                 </View>
               </View>
@@ -216,17 +238,34 @@ export default function CartScreen() {
         <Text style={styles.sectionTitle}>Delivery Address</Text>
         <Card style={styles.sectionCard}>
           {addressOptions.length > 0 ? (
-            <Dropdown
-              label="Select Saved Address"
-              options={addressOptions}
-              value={selectedAddressId}
-              onChange={setSelectedAddressId}
-            />
+            <View>
+              <Dropdown
+                label="Select Saved Address"
+                options={addressOptions}
+                value={selectedAddressId}
+                onChange={setSelectedAddressId}
+              />
+              <Pressable
+                onPress={() => router.push('/profile/addresses?from=cart')}
+                style={{ marginTop: spacing.sm, alignSelf: 'flex-end' }}
+                hitSlop={8}
+              >
+                <Text style={{ ...typography.caption, color: colors.primary, fontWeight: '600' }}>
+                  + Add or Manage Addresses
+                </Text>
+              </Pressable>
+            </View>
           ) : (
             <View>
-              <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: 8 }}>
+              <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: spacing.sm }}>
                 No delivery addresses found on your account.
               </Text>
+              <Button
+                title="Manage Addresses"
+                onPress={() => router.push('/profile/addresses?from=cart')}
+                variant="outline"
+                size="sm"
+              />
             </View>
           )}
         </Card>
@@ -235,15 +274,23 @@ export default function CartScreen() {
         <Text style={styles.sectionTitle}>Price Breakdown</Text>
         <Card style={styles.sectionCard}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal ({cartItems.length} items)</Text>
+            <Text style={styles.summaryLabel}>Base Subtotal ({cartItems.length} items)</Text>
             <Text style={styles.summaryValue}>{formatPrice(subtotal)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>GST & Taxes (18%)</Text>
+            <Text style={styles.summaryLabel}>Total GST (18%)</Text>
             <Text style={styles.summaryValue}>{formatPrice(taxes)}</Text>
           </View>
+          <View style={[styles.summaryRow, { paddingLeft: spacing.sm }]}>
+            <Text style={[styles.summaryLabel, { fontSize: 12, color: colors.textSecondary }]}>• CGST (9.0%)</Text>
+            <Text style={[styles.summaryValue, { fontSize: 12, color: colors.textSecondary }]}>+{formatPrice(taxes / 2)}</Text>
+          </View>
+          <View style={[styles.summaryRow, { paddingLeft: spacing.sm }]}>
+            <Text style={[styles.summaryLabel, { fontSize: 12, color: colors.textSecondary }]}>• SGST (9.0%)</Text>
+            <Text style={[styles.summaryValue, { fontSize: 12, color: colors.textSecondary }]}>+{formatPrice(taxes / 2)}</Text>
+          </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.grandTotalLabel}>Grand Total</Text>
+            <Text style={styles.grandTotalLabel}>Grand Total (Incl. Taxes)</Text>
             <Text style={styles.grandTotalValue}>{formatPrice(grandTotal)}</Text>
           </View>
         </Card>
@@ -251,14 +298,12 @@ export default function CartScreen() {
 
       {/* Footer Checkout Bar */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <View style={styles.footerInfo}>
-          <Text style={styles.footerLabel}>Total Amount</Text>
-          <Text style={styles.footerTotal}>{formatPrice(grandTotal)}</Text>
-        </View>
-        <Button
-          title={submitting ? 'Placing Order...' : 'Submit Order'}
-          onPress={() => setShowConfirmModal(true)}
-          disabled={submitting || !selectedAddressId}
+        <SwipeButton
+          key={swipeKey}
+          title={`Swipe to Pay ${formatPrice(grandTotal)}`}
+          onSwipeSuccess={handleCheckout}
+          disabled={submitting || !selectedAddressId || grandTotal <= 0}
+          loading={submitting}
           style={styles.checkoutBtn}
         />
       </View>
@@ -266,9 +311,9 @@ export default function CartScreen() {
       {/* Confirmation Dialog */}
       <Dialog
         visible={showConfirmModal}
-        title="Confirm Order"
-        message={`Are you sure you want to submit this order for ${formatPrice(grandTotal)}?`}
-        confirmLabel="Confirm Order"
+        title="Confirm Order & Pay"
+        message={`Are you sure you want to proceed to payment for ${formatPrice(grandTotal)}?`}
+        confirmLabel="Proceed to Payment"
         cancelLabel="Cancel"
         onConfirm={handleCheckout}
         onCancel={() => setShowConfirmModal(false)}
@@ -401,9 +446,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
@@ -421,6 +463,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   checkoutBtn: {
-    minWidth: 140,
+    width: '100%',
   },
 });

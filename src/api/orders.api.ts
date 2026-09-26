@@ -34,12 +34,12 @@ export const getUserOrders = async (options?: {
 }): Promise<ApiResponse<Order[] | PaginatedResponse<Order>>> => {
   try {
     let url = '/api/orders';
-    
+
     const params = new URLSearchParams();
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.status) params.append('status', options.status);
-    
+
     if (params.toString()) {
       url += `?${params.toString()}`;
     }
@@ -81,9 +81,8 @@ export const cancelOrder = async (
   reason?: string,
 ): Promise<ApiResponse<Order>> => {
   try {
-    const response = await api.patch<Order>(`/api/orders/${orderId}`, {
-      status: 'cancelled',
-      cancelReason: reason,
+    const response = await api.patch<Order>(`/api/orders/${orderId}/status`, {
+      status: 'CANCELLED',
     });
     return response;
   } catch (error) {
@@ -104,9 +103,8 @@ export const updateOrderStatus = async (
   notes?: string,
 ): Promise<ApiResponse<Order>> => {
   try {
-    const response = await api.patch<Order>(`/api/orders/${orderId}`, {
+    const response = await api.patch<Order>(`/api/orders/${orderId}/status`, {
       status,
-      notes,
     });
     return response;
   } catch (error) {

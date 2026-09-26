@@ -12,9 +12,7 @@ export default function SettingsScreen() {
 
   const settings = [
     { label: 'Push Notifications', value: pushNotifications, onChange: setPushNotifications },
-    { label: 'Price Alerts', value: priceAlerts, onChange: setPriceAlerts },
-    { label: 'Order Updates', value: orderUpdates, onChange: setOrderUpdates },
-    { label: 'Biometric Login', value: biometric, onChange: setBiometric },
+
   ];
 
   return (

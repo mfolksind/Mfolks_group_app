@@ -8,7 +8,7 @@ export default function ProfileLayout() {
       <Stack.Screen name="company-info" />
       <Stack.Screen name="addresses" />
       <Stack.Screen name="order-history" />
-      <Stack.Screen name="settings" />
+
       <Stack.Screen name="support" />
     </Stack>
   );

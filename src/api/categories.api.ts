@@ -1,19 +1,25 @@
 import { api } from './client';
-import { Category, ApiResponse, PaginatedResponse } from '@/types/backend';
+import { Category, ApiResponse } from '@/types/backend';
 
 /**
  * Categories API Service
+ * Uses familySlug query parameter to let the live backend filter categories by family.
+ * See FAMILY_API_DOCS.md: GET /api/categories?familySlug=geotrix
  */
 
 /**
- * Get all categories
- * Backend endpoint: GET https://api.mfolks.com/api/categories
+ * Get all categories (optionally filtered by familySlug)
  */
-export const getCategories = async (): Promise<
+export const getCategories = async (options?: { familyId?: string; familySlug?: string }): Promise<
   ApiResponse<Category[]>
 > => {
   try {
-    const response = await api.get<any>('/api/categories');
+    const params = new URLSearchParams();
+    if (options?.familySlug) params.append('familySlug', options.familySlug);
+    else if (options?.familyId) params.append('family', options.familyId);
+
+    const url = `/api/categories${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await api.get<any>(url);
 
     if (response.success && response.data) {
       const categories = Array.isArray(response.data)
@@ -22,9 +28,18 @@ export const getCategories = async (): Promise<
           ? response.data.data
           : [];
 
+      let filtered = categories;
+      if (options?.familyId) {
+        filtered = filtered.filter((item: any) => {
+          if (!item.family) return false;
+          const catFamId = typeof item.family === 'object' ? item.family._id || item.family.id : item.family;
+          return String(catFamId) === String(options.familyId);
+        });
+      }
+
       return {
         ...response,
-        data: categories,
+        data: filtered,
       };
     }
 
@@ -39,13 +54,19 @@ export const getCategories = async (): Promise<
 };
 
 /**
- * Get active categories only
+ * Get active categories (optionally filtered by familySlug)
+ * Backend handles family filtering via ?familySlug=geotrix
  */
-export const getActiveCategories = async (): Promise<
+export const getActiveCategories = async (options?: { familyId?: string; familySlug?: string }): Promise<
   ApiResponse<Category[]>
 > => {
   try {
-    const response = await api.get<any>('/api/categories');
+    const params = new URLSearchParams();
+    if (options?.familySlug) params.append('familySlug', options.familySlug);
+    else if (options?.familyId) params.append('family', options.familyId);
+
+    const url = `/api/categories${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await api.get<any>(url);
 
     if (response.success && response.data) {
       const categories = Array.isArray(response.data)
@@ -54,9 +75,18 @@ export const getActiveCategories = async (): Promise<
           ? response.data.data
           : [];
 
+      let filtered = categories.filter((item: Category) => item.status === 'ACTIVE');
+      if (options?.familyId) {
+        filtered = filtered.filter((item: any) => {
+          if (!item.family) return false;
+          const catFamId = typeof item.family === 'object' ? item.family._id || item.family.id : item.family;
+          return String(catFamId) === String(options.familyId);
+        });
+      }
+
       return {
         ...response,
-        data: categories.filter((item: Category) => item.status === 'ACTIVE'),
+        data: filtered,
       };
     }
 
@@ -89,7 +119,7 @@ export const getCategoryById = async (
 };
 
 /**
- * Get categories by parent category (if backend supports hierarchies)
+ * Get categories by parent category
  */
 export const getCategoriesByParent = async (
   parentId: string,

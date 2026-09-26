@@ -1,9 +1,14 @@
-import React, { createContext, useContext, useMemo, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useMemo, useState, ReactNode, useEffect, useCallback } from 'react';
 import { User } from '@/types/backend';
 import { loginUser, registerUser, getCurrentUser, logoutUser } from '@/api/auth.api';
 import { RegisterRequest } from '@/types/backend';
+import { updateUserFamily } from '@/api/families.api';
 
-export type UserStatus = 'pending' | 'approved' | 'rejected';
+import { initSocket, disconnectSocket } from '@/services/socket';
+import { registerForPushNotificationsAsync } from '@/services/notificationService';
+import { getAuthToken } from '@/api/client';
+
+export type UserStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'inactive';
 
 interface AuthContextValue {
   isAuthenticated: boolean;
@@ -11,11 +16,14 @@ interface AuthContextValue {
   user: User | null;
   registrationStatus: UserStatus | null;
   error: string | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (data: Partial<RegisterRequest>) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; isPending?: boolean; message?: string }>;
+  register: (data: Partial<RegisterRequest>) => Promise<{ success: boolean; isPending?: boolean; message?: string }>;
   logout: () => Promise<void>;
+  checkApprovalStatus: () => Promise<User | null>;
+  switchActiveFamily: (familyId: string) => Promise<{ success: boolean; isPending?: boolean; message?: string }>;
   setRegistrationPending: () => void;
   clearError: () => void;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -27,19 +35,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [registrationStatus, setRegistrationStatus] = useState<UserStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Try to restore session on app startup
+  const refreshUser = useCallback(async (): Promise<User | null> => {
+    try {
+      const response = await getCurrentUser();
+      if (response.success && response.data) {
+        const uData = response.data;
+        setUser(uData);
+
+        const isApproved = uData.status === 'active' || uData.familyApprovalStatus === 'approved';
+        if (isApproved) {
+          setIsAuthenticated(true);
+          setRegistrationStatus('approved');
+        } else {
+          setIsAuthenticated(false);
+          setRegistrationStatus('pending');
+        }
+        return uData;
+      }
+      return null;
+    } catch (err) {
+      console.error('Error refreshing user profile:', err);
+      return null;
+    }
+  }, []);
+
+  // Subscribe to auth failure events (e.g. token refresh fails)
+  useEffect(() => {
+    const { subscribeAuthFailure } = require('@/api/client');
+    subscribeAuthFailure(() => {
+      setIsAuthenticated(false);
+      setUser(null);
+      setRegistrationStatus(null);
+    });
+  }, []);
+
+  // Restore session on startup
   useEffect(() => {
     const restoreSession = async () => {
       try {
         setIsLoading(true);
-        const response = await getCurrentUser();
-        
-        if (response.success && response.data) {
-          setUser(response.data);
-          setIsAuthenticated(true);
-          setRegistrationStatus(response.data.status as UserStatus);
+        const u = await refreshUser();
+        if (u) {
+          const token = await getAuthToken();
+          if (token) {
+            initSocket(token);
+            registerForPushNotificationsAsync('https://api.mfolks.com', token);
+          }
         } else {
-          // No valid session
           setIsAuthenticated(false);
           setUser(null);
         }
@@ -53,9 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     restoreSession();
-  }, []);
+  }, [refreshUser]);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; isPending?: boolean; message?: string }> => {
     try {
       setError(null);
       setIsLoading(true);
@@ -63,20 +105,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await loginUser(email, password);
 
       if (response.success && response.data) {
-        setUser(response.data.user);
-        setIsAuthenticated(true);
-        setRegistrationStatus(response.data.user.status as UserStatus);
-        return true;
+        const u = response.data.user;
+        setUser(u);
+
+        const isPending = u.status === 'inactive' || u.familyApprovalStatus === 'pending';
+
+        if (isPending) {
+          setIsAuthenticated(false);
+          setRegistrationStatus('pending');
+          return { success: false, isPending: true, message: 'Account is pending admin approval' };
+        } else {
+          setIsAuthenticated(true);
+          setRegistrationStatus('approved');
+          const token = await getAuthToken();
+          if (token) {
+            initSocket(token);
+            registerForPushNotificationsAsync('https://api.mfolks.com', token);
+          }
+          return { success: true };
+        }
       } else {
         const errorMsg = response.message || 'Login failed';
         setError(errorMsg);
-        return false;
+        return { success: false, message: errorMsg };
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Login failed';
       setError(errorMsg);
       console.error('Login error:', err);
-      return false;
+      return { success: false, message: errorMsg };
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (
     data: Partial<RegisterRequest>,
-  ): Promise<boolean> => {
+  ): Promise<{ success: boolean; isPending?: boolean; message?: string }> => {
     try {
       setError(null);
       setIsLoading(true);
@@ -92,20 +149,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await registerUser(data as RegisterRequest);
 
       if (response.success && response.data) {
-        setUser(response.data.user);
-        setRegistrationStatus('pending');
-        setIsAuthenticated(false); // User needs approval before login
-        return true;
+        const u = response.data.user;
+        setUser(u);
+
+        const isPending = u.status === 'inactive' || u.familyApprovalStatus === 'pending';
+
+        if (isPending) {
+          setIsAuthenticated(false);
+          setRegistrationStatus('pending');
+          return { success: true, isPending: true };
+        } else {
+          setIsAuthenticated(true);
+          setRegistrationStatus('approved');
+          return { success: true, isPending: false };
+        }
       } else {
         const errorMsg = response.message || 'Registration failed';
         setError(errorMsg);
-        return false;
+        return { success: false, message: errorMsg };
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Registration failed';
       setError(errorMsg);
       console.error('Registration error:', err);
-      return false;
+      return { success: false, message: errorMsg };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkApprovalStatus = async (): Promise<User | null> => {
+    return refreshUser();
+  };
+
+  const switchActiveFamily = async (familyId: string): Promise<{ success: boolean; isPending?: boolean; message?: string }> => {
+    try {
+      setIsLoading(true);
+      const res = await updateUserFamily(familyId);
+      if (res.success) {
+        const u = await refreshUser();
+        const isPending = u?.status === 'inactive' || u?.familyApprovalStatus === 'pending';
+        return { success: true, isPending };
+      } else {
+        return { success: false, message: res.message || 'Failed to switch family' };
+      }
+    } catch (err) {
+      console.error('Switch active family error:', err);
+      return { success: false, message: 'Failed to switch family' };
     } finally {
       setIsLoading(false);
     }
@@ -115,21 +205,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setError(null);
       setIsLoading(true);
-
-      // Notify backend
+      disconnectSocket();
       await logoutUser();
-
-      // Clear local state
-      setIsAuthenticated(false);
-      setUser(null);
-      setRegistrationStatus(null);
     } catch (err) {
       console.error('Logout error:', err);
-      // Still clear local state even if backend fails
+    } finally {
       setIsAuthenticated(false);
       setUser(null);
       setRegistrationStatus(null);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -148,10 +231,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       logout,
+      checkApprovalStatus,
+      switchActiveFamily,
       setRegistrationPending: () => setRegistrationStatus('pending'),
       clearError,
+      refreshUser,
     }),
-    [isAuthenticated, isLoading, user, registrationStatus, error],
+    [isAuthenticated, isLoading, user, registrationStatus, error, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

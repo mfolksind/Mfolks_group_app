@@ -7,15 +7,18 @@ import { colors, spacing } from '@/design-system';
 export default function PersonalInfoScreen() {
   const { user } = useAuth();
 
+  const fullName = user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Valued User';
+  const phoneNumber = user?.phone || user?.mobile || 'Not provided';
+  const emailAddress = user?.email || '';
+
   return (
     <View style={styles.container}>
       <AppBar title="Personal Information" showBack />
       <ScreenContainer scroll padded>
         <Card>
-          <Input label="First Name" value={user?.firstName ?? ''} editable={false} />
-          <Input label="Last Name" value={user?.lastName ?? ''} editable={false} />
-          <Input label="Mobile Number" value={user?.mobile ?? ''} editable={false} leftIcon="call-outline" />
-          <Input label="Email Address" value={user?.email ?? ''} editable={false} leftIcon="mail-outline" />
+          <Input label="Full Name" value={fullName} editable={false} leftIcon="person-outline" />
+          <Input label="Phone Number" value={phoneNumber} editable={false} leftIcon="call-outline" />
+          <Input label="Email Address" value={emailAddress} editable={false} leftIcon="mail-outline" />
         </Card>
       </ScreenContainer>
     </View>

@@ -3,7 +3,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
-import { AppBar, Card, StatusTag, getOrderStatusVariant, EmptyState, ErrorState } from '@/components/ui';
+import { AppBar, Card, StatusTag, getOrderStatusVariant, getOrderStatusLabel, EmptyState, ErrorState } from '@/components/ui';
 import { getUserOrders } from '@/api/orders.api';
 import { useAuth } from '@/context/AuthContext';
 import { Order } from '@/types/backend';
@@ -57,18 +57,6 @@ export default function OrdersScreen() {
     return `₹${price.toLocaleString('en-IN')}`;
   };
 
-  const getOrderStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      PENDING: 'Pending',
-      CONFIRMED: 'Confirmed',
-      SHIPPED: 'Shipped',
-      DELIVERED: 'Delivered',
-      CANCELLED: 'Cancelled',
-      FAILED: 'Failed',
-    };
-    return labels[status] || status;
-  };
-
   if (!user) {
     return (
       <View style={styles.container}>
@@ -88,7 +76,7 @@ export default function OrdersScreen() {
 
   return (
     <View style={styles.container}>
-      <AppBar title="Orders" subtitle="Order History" />
+      <AppBar title="Orders" subtitle="Order History" showCart showSupport showNotification />
       <ScreenContainer scroll padded>
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -117,7 +105,7 @@ export default function OrdersScreen() {
             >
               <Card style={styles.orderCard}>
                 <View style={styles.orderHeader}>
-                  <Text style={styles.orderNo}>{order.orderNo}</Text>
+                  <Text style={styles.orderNo}>{order.orderNumber || order.orderNo || `Order #${order._id.substring(0, 8)}`}</Text>
                   <StatusTag
                     label={getOrderStatusLabel(order.status)}
                     variant={getOrderStatusVariant(order.status)}
@@ -125,28 +113,30 @@ export default function OrdersScreen() {
                 </View>
 
                 {/* Show first item's product info */}
-                {order.items && order.items.length > 0 && (
+                {order.items && order.items.length > 0 ? (
                   <>
                     <Text style={styles.productName}>
-                      {order.items[0].variant?.variantName || 'Product'}
+                      {order.items[0].productName || order.items[0].variant?.variantName || 'Product'}
                     </Text>
-                    {order.items[0].variant?.product?.brand && (
+                    {order.items.length > 1 && (
                       <Text style={styles.orderMeta}>
-                        Brand: {order.items[0].variant.product.brand}
+                        + {order.items.length - 1} more items
                       </Text>
                     )}
                   </>
+                ) : (
+                  <Text style={styles.productName}>Order #{order.orderNumber || order.orderNo || order._id.substring(0, 8)}</Text>
                 )}
 
                 <View style={styles.orderDetails}>
                   <View style={styles.detail}>
                     <Text style={styles.detailLabel}>Items</Text>
-                    <Text style={styles.detailValue}>{order.items?.length || 0}</Text>
+                    <Text style={styles.detailValue}>{order.items?.length || 1}</Text>
                   </View>
                   <View style={styles.detail}>
                     <Text style={styles.detailLabel}>Total</Text>
                     <Text style={styles.totalValue}>
-                      {formatPrice(order.totalAmount || 0)}
+                      {formatPrice(order.totalAmount || order.subtotal || 0)}
                     </Text>
                   </View>
                 </View>

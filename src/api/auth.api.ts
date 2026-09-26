@@ -2,37 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAuthToken, setRefreshToken, clearAuthToken, clearRefreshToken } from './client';
 import { User, LoginRequest, LoginResponse, RegisterRequest, ApiResponse } from '@/types/backend';
 
-const DEMO_EMAIL = 'demo@mforks.com';
-const DEMO_PASSWORD = 'Demo@123';
 
-const demoUser: User = {
-  _id: 'demo-user-1',
-  companyName: 'MFolks Demo',
-  firstName: 'Demo',
-  lastName: 'User',
-  mobile: '9999999999',
-  email: DEMO_EMAIL,
-  userType: 'buyer',
-  status: 'approved',
-  addresses: [
-    {
-      _id: 'demo-address-1',
-      label: 'Home',
-      line1: '12 Demo Street',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560001',
-      country: 'India',
-      isDefault: true,
-    },
-  ],
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-
-const isDemoLogin = (email: string, password: string) => {
-  return email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD;
-};
 
 /**
  * Authentication API Service
@@ -46,20 +16,6 @@ export const loginUser = async (
   password: string,
 ): Promise<ApiResponse<LoginResponse>> => {
   try {
-    if (isDemoLogin(email, password)) {
-      await setAuthToken('demo-access-token');
-      await setRefreshToken('demo-refresh-token');
-      await AsyncStorage.setItem('demo_session', 'true');
-
-      return {
-        success: true,
-        data: {
-          user: demoUser,
-          accessToken: 'demo-access-token',
-          refreshToken: 'demo-refresh-token',
-        },
-      };
-    }
 
     const response = await api.post<LoginResponse>('/auth/login', {
       email,
@@ -67,12 +23,14 @@ export const loginUser = async (
     }, { skipAuth: true });
 
     if (response.success && response.data) {
-      // Store tokens
-      await setAuthToken(response.data.accessToken);
-      if (response.data.refreshToken) {
-        await setRefreshToken(response.data.refreshToken);
+      const { tokens } = response.data;
+      if (tokens) {
+        await setAuthToken(tokens.accessToken);
+        if (tokens.refreshToken) {
+          await setRefreshToken(tokens.refreshToken);
+        }
+        await AsyncStorage.removeItem('demo_session');
       }
-      await AsyncStorage.removeItem('demo_session');
     }
 
     return response;
@@ -90,11 +48,22 @@ export const loginUser = async (
  */
 export const registerUser = async (
   data: RegisterRequest,
-): Promise<ApiResponse<{ user: User }>> => {
+): Promise<ApiResponse<{ user: User; tokens?: { accessToken: string; refreshToken?: string } }>> => {
   try {
-    const response = await api.post<{ user: User }>('/auth/register', data, {
+    const response = await api.post<any>('/auth/register', data, {
       skipAuth: true,
     });
+
+    if (response.success && response.data) {
+      const { tokens } = response.data;
+      if (tokens) {
+        await setAuthToken(tokens.accessToken);
+        if (tokens.refreshToken) {
+          await setRefreshToken(tokens.refreshToken);
+        }
+        await AsyncStorage.removeItem('demo_session');
+      }
+    }
 
     return response;
   } catch (error) {
@@ -111,15 +80,7 @@ export const registerUser = async (
  */
 export const getCurrentUser = async (): Promise<ApiResponse<User>> => {
   try {
-    const isDemoSession = await AsyncStorage.getItem('demo_session');
-    if (isDemoSession === 'true') {
-      return {
-        success: true,
-        data: demoUser,
-      };
-    }
-
-    const response = await api.get<User>('/auth/me');
+    const response = await api.get<User>('/api/users/me');
     return response;
   } catch (error) {
     console.error('Get current user error:', error);
@@ -169,21 +130,20 @@ export const logoutUser = async (): Promise<ApiResponse<void>> => {
  * Refresh access token
  * (Called automatically by the API client when token expires)
  */
-export const refreshToken = async (): Promise<ApiResponse<LoginResponse>> => {
+export const refreshToken = async (): Promise<ApiResponse<{ accessToken: string; refreshToken?: string }>> => {
   try {
     const isDemoSession = await AsyncStorage.getItem('demo_session');
     if (isDemoSession === 'true') {
       return {
         success: true,
         data: {
-          user: demoUser,
           accessToken: 'demo-access-token',
           refreshToken: 'demo-refresh-token',
         },
       };
     }
 
-    const response = await api.post<LoginResponse>(
+    const response = await api.post<{ accessToken: string; refreshToken?: string }>(
       '/auth/refresh',
       {},
       { skipAuth: true },
@@ -209,3 +169,74 @@ export const refreshToken = async (): Promise<ApiResponse<LoginResponse>> => {
     };
   }
 };
+
+/**
+ * Request password reset OTP
+ */
+export const forgotPassword = async (
+  email: string,
+): Promise<ApiResponse<{ email: string }>> => {
+  try {
+    const response = await api.post<{ email: string }>(
+      '/auth/forgot-password',
+      { email: email.trim() },
+      { skipAuth: true }
+    );
+    return response;
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    return {
+      success: false,
+      message: 'Failed to request password reset OTP',
+    };
+  }
+};
+
+/**
+ * Verify password reset OTP
+ */
+export const verifyOtp = async (
+  email: string,
+  otp: string,
+): Promise<ApiResponse<{ token: string; email: string }>> => {
+  try {
+    const response = await api.post<{ token: string; email: string }>(
+      '/auth/verify-otp',
+      { email: email.trim(), otp: otp.trim() },
+      { skipAuth: true }
+    );
+    return response;
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    return {
+      success: false,
+      message: 'Failed to verify OTP code',
+    };
+  }
+};
+
+/**
+ * Reset password with verified token or OTP
+ */
+export const resetPassword = async (payload: {
+  token?: string;
+  email?: string;
+  otp?: string;
+  password: string;
+}): Promise<ApiResponse<Record<string, unknown>>> => {
+  try {
+    const response = await api.post<Record<string, unknown>>(
+      '/auth/reset-password',
+      payload,
+      { skipAuth: true }
+    );
+    return response;
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return {
+      success: false,
+      message: 'Failed to reset password',
+    };
+  }
+};
+

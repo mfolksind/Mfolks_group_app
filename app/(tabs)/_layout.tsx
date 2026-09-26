@@ -8,6 +8,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
 
@@ -84,6 +85,11 @@ export default function TabsLayout() {
             />
           ),
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('profile', { screen: 'index' });
+          },
+        })}
       />
     </Tabs>
   );

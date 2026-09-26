@@ -1,14 +1,16 @@
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { AppBar, Card, StatusTag, ErrorState, EmptyState } from '@/components/ui';
 import { getActiveCategories } from '@/api/categories.api';
 import { Category } from '@/types/backend';
 import { colors, spacing, typography } from '@/design-system';
+import { useAuth } from '@/context/AuthContext';
 
 export default function CategoryScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { type } = useLocalSearchParams<{ type: string }>();
   const buyingType = type ?? 'domestic';
 
@@ -16,12 +18,15 @@ export default function CategoryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const activeFamilySlug = typeof user?.family === 'object' ? (user.family as any)?.slug : undefined;
+  const activeFamilyId = typeof user?.family === 'object' ? (user.family as any)?._id : (typeof user?.family === 'string' ? user.family : undefined);
+
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await getActiveCategories();
+      const response = await getActiveCategories({ familySlug: activeFamilySlug, familyId: activeFamilyId });
 
       if (response.success && response.data) {
         const categoryList = Array.isArray(response.data)
@@ -41,7 +46,7 @@ export default function CategoryScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeFamilySlug, activeFamilyId]);
 
   useFocusEffect(
     useCallback(() => {
