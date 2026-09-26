@@ -1,34 +1,57 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { AppBar, Input, Button, Dropdown } from '@/components/ui';
 import { colors, layout, spacing, typography } from '@/design-system';
 import { UserType } from '@/types';
+import { getFamilies, FamilyItem } from '@/api/families.api';
+import { createAddress } from '@/api/addresses.api';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [families, setFamilies] = useState<FamilyItem[]>([]);
   const [form, setForm] = useState({
     companyName: '',
     firstName: '',
     lastName: '',
     mobile: '',
     email: '',
-    userType: '' as UserType | '',
+    password: '',
+    userType: 'buyer' as UserType,
     address: '',
     city: '',
     state: '',
     pincode: '',
-    industryType: '',
+    industryType: '', // Holds family ID
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchFamiliesList = async () => {
+      const res = await getFamilies();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const list = res.data;
+        setFamilies(list);
+        setForm((prev) => ({ ...prev, industryType: list[0]._id }));
+      }
+    };
+    fetchFamiliesList();
+  }, []);
 
   const updateField = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, [key]: '' }));
+  };
+
+  const handlePasswordBlur = () => {
+    if (form.password && form.password.length < 8) {
+      setErrors((prev) => ({ ...prev, password: 'Password must be at least 8 characters' }));
+    }
   };
 
   const validate = () => {
@@ -38,6 +61,11 @@ export default function RegisterScreen() {
     if (!form.lastName) newErrors.lastName = 'Required';
     if (!form.mobile || form.mobile.length < 10) newErrors.mobile = 'Valid phone required';
     if (!form.email || !form.email.includes('@')) newErrors.email = 'Valid email required';
+    if (!form.password) {
+      newErrors.password = 'Required';
+    } else if (form.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    }
     if (!form.userType) newErrors.userType = 'Required';
     if (!form.industryType) newErrors.industryType = 'Required';
     if (!form.address) newErrors.address = 'Required';
@@ -48,18 +76,49 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!validate()) return;
     setLoading(true);
-    await register({
-      companyName: form.companyName,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      mobile: form.mobile,
+    const res = await register({
+      name: `${form.firstName} ${form.lastName}`.trim(),
       email: form.email,
-      userType: form.userType as UserType,
-      industryType: form.industryType,
-    });
-    setLoading(false);
-    router.replace('/(auth)/pending-approval');
+      password: form.password,
+      phone: form.mobile,
+      family: form.industryType,
+    } as any);
+
+    if (res.success) {
+      // Save address entered during registration
+      if (form.address && form.city && form.state) {
+        try {
+          await createAddress({
+            fullName: `${form.firstName} ${form.lastName}`.trim(),
+            phone: form.mobile,
+            addressLine1: form.address,
+            city: form.city,
+            state: form.state,
+            country: 'India',
+            postalCode: form.pincode,
+            addressType: 'HOME',
+            isDefault: true,
+          });
+        } catch (addrErr) {
+          console.error('Failed to save address during registration:', addrErr);
+        }
+      }
+      setLoading(false);
+      if (res.isPending) {
+        router.replace('/(auth)/waiting-approval');
+      } else {
+        router.replace('/(tabs)/home');
+      }
+    } else {
+      setLoading(false);
+      setErrors({ form: res.message || 'Registration failed' });
+    }
   };
+
+  const familyOptions = families.map((f) => ({
+    label: `${f.name}${f.requiresAdminApproval ? ' (Requires Admin Approval)' : ''}`,
+    value: f._id,
+  }));
 
   return (
     <View style={styles.container}>
@@ -68,8 +127,10 @@ export default function RegisterScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Text style={styles.heading}>Create Enterprise Account</Text>
           <Text style={styles.description}>
-            Register as an industrial buyer, seller, or both. Your account will be reviewed by our admin team.
+            Select your Industry Family to access specialized marketplace categories and product lines.
           </Text>
+
+          {errors.form ? <Text style={styles.globalError}>{errors.form}</Text> : null}
 
           <Input
             label="Company Name"
@@ -123,6 +184,35 @@ export default function RegisterScreen() {
             required
             error={errors.email}
           />
+          <Input
+            label="Password"
+            value={form.password}
+            onChangeText={(v) => updateField('password', v)}
+            onBlur={handlePasswordBlur}
+            placeholder="Create password (min. 8 characters)"
+            secureTextEntry={!showPassword}
+            leftIcon="lock-closed-outline"
+            rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            onRightIconPress={() => setShowPassword(!showPassword)}
+            hint="Minimum 8 characters required"
+            required
+            error={errors.password}
+          />
+
+          <Dropdown
+            label="Industry Type (Family)"
+            placeholder="Select your industry family"
+            value={form.industryType}
+            onChange={(v) => updateField('industryType', v)}
+            options={familyOptions.length > 0 ? familyOptions : [
+              { label: 'Geotrix', value: 'Geotrix' },
+              { label: 'Thermox', value: 'Thermox' },
+              { label: 'Buildrix', value: 'Buildrix' },
+            ]}
+            required
+            error={errors.industryType}
+          />
+
           <Dropdown
             label="User Type"
             placeholder="Select user type"
@@ -136,21 +226,6 @@ export default function RegisterScreen() {
             required
             error={errors.userType}
           />
-          <Dropdown
-            label="Industry Type"
-            placeholder="Select industry type"
-            value={form.industryType}
-            onChange={(v) => updateField('industryType', v)}
-            options={[
-              { label: 'Buildrix', value: 'Buildrix' },
-              { label: 'Geotrix', value: 'Geotrix' },
-              { label: 'Thermox', value: 'Thermox' },
-            ]}
-            required
-            error={errors.industryType}
-          />
-
-              
 
           <Text style={styles.sectionTitle}>Address</Text>
           <Input
@@ -177,6 +252,26 @@ export default function RegisterScreen() {
             placeholder="PIN Code"
             keyboardType="number-pad"
           />
+
+          <View style={styles.legalContainer}>
+            <Text style={styles.legalText}>
+              By registering, you agree to MFolks{' '}
+              <Text
+                style={styles.legalLink}
+                onPress={() => Linking.openURL('https://mfolks.com/app-terms-and-conditions/')}
+              >
+                Terms & Conditions
+              </Text>
+              {' '}and{' '}
+              <Text
+                style={styles.legalLink}
+                onPress={() => Linking.openURL('https://mfolks.com/app-privacy-policy/')}
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </View>
 
           <Button
             title="Submit Registration"
@@ -207,6 +302,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     marginTop: spacing.sm,
   },
+  globalError: {
+    ...typography.caption,
+    color: colors.error,
+    backgroundColor: '#FEE2E2',
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
   sectionTitle: {
     ...typography.heading3,
     marginBottom: spacing.sm,
@@ -222,5 +325,21 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
+  },
+  legalContainer: {
+    marginVertical: spacing.md,
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  legalText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  legalLink: {
+    color: colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

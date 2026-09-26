@@ -8,6 +8,10 @@ interface SearchBarProps {
   onChangeText: (text: string) => void;
   placeholder?: string;
   onFilterPress?: () => void;
+  onSubmitEditing?: () => void;
+  onClear?: () => void;
+  returnKeyType?: 'search' | 'done' | 'go' | 'next';
+  autoFocus?: boolean;
 }
 
 export function SearchBar({
@@ -15,7 +19,16 @@ export function SearchBar({
   onChangeText,
   placeholder = 'Search products, categories...',
   onFilterPress,
+  onSubmitEditing,
+  onClear,
+  returnKeyType = 'search',
+  autoFocus = false,
 }: SearchBarProps) {
+  const handleClear = () => {
+    onChangeText('');
+    onClear?.();
+  };
+
   return (
     <View style={styles.container}>
       <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -25,9 +38,14 @@ export function SearchBar({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.textSecondary}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        autoFocus={autoFocus}
+        autoCapitalize="none"
+        autoCorrect={false}
       />
       {value.length > 0 && (
-        <Pressable onPress={() => onChangeText('')} hitSlop={8}>
+        <Pressable onPress={handleClear} hitSlop={8}>
           <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
         </Pressable>
       )}

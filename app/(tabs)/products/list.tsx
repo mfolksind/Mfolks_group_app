@@ -7,9 +7,11 @@ import { AppBar, ProductCard, SearchBar, EmptyState, ErrorState, Skeleton } from
 import { getVariantsByCategory } from '@/api/products.api';
 import { Variant } from '@/types/backend';
 import { colors, spacing, typography } from '@/design-system';
+import { useHardwareBack } from '@/hooks/useHardwareBack';
 
 export default function ProductListScreen() {
   const router = useRouter();
+  useHardwareBack('/(tabs)/products');
   const { type, categoryId, categoryName } = useLocalSearchParams<{
     type: string;
     categoryId: string;
@@ -23,24 +25,17 @@ export default function ProductListScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchVariants = useCallback(async () => {
-    if (!categoryId) {
-      console.warn('Category ID is missing, params:', { type, categoryId, categoryName });
-      setError('Category ID is missing');
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
 
       const response = await getVariantsByCategory(categoryId);
 
-      if (response.success) {
+      if (response.success && response.data) {
         const variantList = Array.isArray(response.data)
           ? response.data
-          : Array.isArray(response.data?.data)
-            ? response.data.data
+          : Array.isArray((response.data as any)?.data)
+            ? (response.data as any).data
             : [];
         setVariants(variantList);
         setFilteredVariants(variantList);
@@ -106,8 +101,8 @@ export default function ProductListScreen() {
   return (
     <View style={styles.container}>
       <AppBar
-        title="Products"
-        subtitle={`${categoryName ?? 'Category'} · Live Rates`}
+        title={categoryName ? categoryName : 'Product Variants'}
+        subtitle="All Product Variants"
         showBack
         showCart
       />
@@ -117,7 +112,7 @@ export default function ProductListScreen() {
           <SearchBar
             value={search}
             onChangeText={setSearch}
-            placeholder={`Search ${categoryName ?? 'products'}...`}
+            placeholder={`Search ${categoryName ?? 'variants'}...`}
           />
         )}
 
@@ -127,7 +122,7 @@ export default function ProductListScreen() {
           </View>
         ) : error ? (
           <ErrorState
-            title="Failed to Load Products"
+            title="Failed to Load Variants"
             message={error}
             onRetry={() => {
               fetchVariants();
@@ -136,13 +131,13 @@ export default function ProductListScreen() {
         ) : filteredVariants.length === 0 ? (
           <EmptyState
             icon="search-outline"
-            title="No Products Found"
-            message={search.trim() !== '' ? 'No products match your search.' : 'No products available in this category.'}
+            title="No Variants Found"
+            message={search.trim() !== '' ? 'No variants match your search.' : 'No variants available in this category.'}
           />
         ) : (
           <>
             <Text style={styles.count}>
-              {filteredVariants.length} product{filteredVariants.length !== 1 ? 's' : ''} available
+              {filteredVariants.length} variant{filteredVariants.length !== 1 ? 's' : ''} available
             </Text>
             <FlatList
               data={filteredVariants}

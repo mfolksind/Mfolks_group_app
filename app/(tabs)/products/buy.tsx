@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
@@ -6,11 +6,14 @@ import { AppBar, Button, Card, Dropdown, Dialog, ErrorState } from '@/components
 import { useAuth } from '@/context/AuthContext';
 import { getVariantById } from '@/api/products.api';
 import { createOrder } from '@/api/orders.api';
+import { getAddresses } from '@/api/addresses.api';
 import { Variant, Address } from '@/types/backend';
 import { colors, spacing, typography } from '@/design-system';
+import { useHardwareBack } from '@/hooks/useHardwareBack';
 
 export default function BuyProductScreen() {
   const router = useRouter();
+  useHardwareBack('/(tabs)/products');
   const { variantId } = useLocalSearchParams<{ variantId: string }>();
   const { user } = useAuth();
 
@@ -18,11 +21,30 @@ export default function BuyProductScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('1');
-  const [selectedAddressId, setSelectedAddressId] = useState(user?.addresses?.[0]?._id ?? '');
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Fetch variant details
+  const fetchAddresses = useCallback(async () => {
+    try {
+      const res = await getAddresses();
+      if (res.success) {
+        const addrList = res.data || [];
+        setAddresses(addrList);
+        const defaultAddr = addrList.find((a) => a.isDefault);
+        if (defaultAddr) {
+          setSelectedAddressId(defaultAddr._id || defaultAddr.id || '');
+        } else if (addrList.length > 0) {
+          setSelectedAddressId(addrList[0]._id || addrList[0].id || '');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching addresses in checkout:', err);
+    }
+  }, []);
+
+  // Fetch variant details & addresses
   useEffect(() => {
     const fetchVariant = async () => {
       if (!variantId) {
@@ -39,10 +61,6 @@ export default function BuyProductScreen() {
 
         if (response.success && response.data) {
           setVariant(response.data);
-          // Set default address
-          if (user?.addresses && user.addresses.length > 0) {
-            setSelectedAddressId(user.addresses[0]._id || '');
-          }
         } else {
           setError(response.message || 'Failed to load product details');
           setVariant(null);
@@ -57,7 +75,8 @@ export default function BuyProductScreen() {
     };
 
     fetchVariant();
-  }, [variantId, user]);
+    fetchAddresses();
+  }, [variantId, fetchAddresses]);
 
   if (!user) {
     return (
@@ -120,7 +139,7 @@ export default function BuyProductScreen() {
   const taxes = subtotal * 0.18; // 18% GST
   const grandTotal = subtotal + taxes;
 
-  const selectedAddress = user.addresses?.find((a) => a._id === selectedAddressId);
+  const selectedAddress = addresses.find((a) => a._id === selectedAddressId || a.id === selectedAddressId);
   const canOrder = variant.stock > 0 && quantityNum <= variant.stock;
 
   const handleSubmitOrder = async () => {
@@ -136,14 +155,11 @@ export default function BuyProductScreen() {
       const orderResponse = await createOrder({
         items: [
           {
-            variantId: variant._id,
+            variantId: variant._id || '',
             quantity: quantityNum,
-            price: variant.price,
-            discountPrice: variant.discountPrice,
-            subtotal: subtotal,
           },
         ],
-        deliveryAddressId: selectedAddressId,
+        addressId: selectedAddressId,
       });
 
       if (orderResponse.success && orderResponse.data) {
@@ -152,7 +168,7 @@ export default function BuyProductScreen() {
           pathname: '/order-success',
           params: {
             orderId: orderResponse.data._id,
-            orderNo: orderResponse.data.orderNo,
+            orderNo: orderResponse.data.orderNumber || orderResponse.data.orderNo,
             total: grandTotal.toFixed(2),
           },
         });
@@ -217,30 +233,49 @@ export default function BuyProductScreen() {
 
         {/* Delivery Address */}
         <Text style={styles.sectionTitle}>Delivery Address</Text>
-        <Dropdown
-          label="Select Address"
-          value={selectedAddressId}
-          onChange={setSelectedAddressId}
-          options={
-            user.addresses?.map((a) => ({
-              label: `${a.label} - ${a.city}`,
-              value: a._id || '',
-            })) || []
-          }
-          required
-        />
+        {addresses.length > 0 ? (
+          <>
+            <Dropdown
+              label="Select Address"
+              value={selectedAddressId}
+              onChange={setSelectedAddressId}
+              options={
+                addresses.map((a) => ({
+                  label: `${a.addressType} - ${a.city}`,
+                  value: a._id || a.id || '',
+                }))
+              }
+              required
+            />
 
-        {selectedAddress && (
+            {selectedAddress && (
+              <Card style={styles.addressCard}>
+                <Text style={styles.addressLabel}>{selectedAddress.addressType}</Text>
+                <Text style={styles.addressText}>
+                  {selectedAddress.addressLine1}
+                  {selectedAddress.addressLine2 ? `, ${selectedAddress.addressLine2}` : ''}
+                </Text>
+                {selectedAddress.landmark ? (
+                  <Text style={styles.addressText}>Landmark: {selectedAddress.landmark}</Text>
+                ) : null}
+                <Text style={styles.addressText}>
+                  {selectedAddress.city}, {selectedAddress.state} - {selectedAddress.postalCode}
+                </Text>
+                <Text style={styles.addressText}>{selectedAddress.country}</Text>
+              </Card>
+            )}
+          </>
+        ) : (
           <Card style={styles.addressCard}>
-            <Text style={styles.addressLabel}>{selectedAddress.label}</Text>
-            <Text style={styles.addressText}>
-              {selectedAddress.line1}
-              {selectedAddress.line2 ? `, ${selectedAddress.line2}` : ''}
+            <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: spacing.sm }}>
+              No delivery addresses found on your account.
             </Text>
-            <Text style={styles.addressText}>
-              {selectedAddress.city}, {selectedAddress.state} - {selectedAddress.pincode}
-            </Text>
-            <Text style={styles.addressText}>{selectedAddress.country}</Text>
+            <Button
+              title="Manage Addresses"
+              onPress={() => router.push('/profile/addresses')}
+              variant="outline"
+              size="sm"
+            />
           </Card>
         )}
 

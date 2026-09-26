@@ -10,24 +10,31 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { AppBar, SearchBar, ErrorState, EmptyState, Skeleton } from '@/components/ui';
+import { useAuth } from '@/context/AuthContext';
 import { getActiveCategories } from '@/api/categories.api';
 import { Category } from '@/types/backend';
 import { colors, radius, spacing, typography, elevation } from '@/design-system';
 
 export default function ProductsIndexScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
+  // Extract family slug from the user's active family (e.g. "geotrix")
+  const activeFamilySlug = typeof user?.family === 'object' ? (user.family as any)?.slug : undefined;
+  const activeFamilyId = typeof user?.family === 'object' ? (user.family as any)?._id : (typeof user?.family === 'string' ? user.family : undefined);
+
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await getActiveCategories();
+      // Pass familySlug so backend filters: GET /api/categories?familySlug=geotrix
+      const response = await getActiveCategories({ familySlug: activeFamilySlug, familyId: activeFamilyId });
 
       if (response.success && response.data) {
         const categoryList = Array.isArray(response.data)
@@ -47,7 +54,7 @@ export default function ProductsIndexScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeFamilySlug, activeFamilyId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -132,7 +139,7 @@ export default function ProductsIndexScreen() {
       <AppBar
         title="Categories"
         subtitle="Browse All Metal Categories"
-        showBack={router.canGoBack()}
+        showBack={false}
         showCart
       />
 

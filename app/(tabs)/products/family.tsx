@@ -8,20 +8,25 @@ import { AppBar, Card, ErrorState, EmptyState } from '@/components/ui';
 import { getActiveCategories } from '@/api/categories.api';
 import { Category } from '@/types/backend';
 import { colors, radius, spacing, typography } from '@/design-system';
+import { useAuth } from '@/context/AuthContext';
 
 export default function FamilyScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const activeFamilySlug = typeof user?.family === 'object' ? (user.family as any)?.slug : undefined;
+  const activeFamilyId = typeof user?.family === 'object' ? (user.family as any)?._id : (typeof user?.family === 'string' ? user.family : undefined);
 
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await getActiveCategories();
+      const response = await getActiveCategories({ familySlug: activeFamilySlug, familyId: activeFamilyId });
 
       if (response.success && response.data) {
         const categoryList = Array.isArray(response.data)
@@ -41,7 +46,7 @@ export default function FamilyScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeFamilySlug, activeFamilyId]);
 
   useFocusEffect(
     React.useCallback(() => {

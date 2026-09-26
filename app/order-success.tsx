@@ -8,17 +8,30 @@ import { colors, radius, spacing, typography } from '@/design-system';
 
 export default function OrderSuccessScreen() {
   const router = useRouter();
-  const { orderNo, total } = useLocalSearchParams<{ orderNo: string; total: string }>();
+  const { orderNo, total, orderId, paymentMethod } = useLocalSearchParams<{
+    orderNo: string;
+    total: string;
+    orderId: string;
+    paymentMethod?: 'razorpay' | 'offline';
+  }>();
+
+  const isOnline = paymentMethod === 'razorpay';
 
   return (
-    <ScreenContainer scroll={false} padded>
+    <ScreenContainer scroll padded>
       <View style={styles.container}>
         <View style={styles.successIcon}>
-          <Ionicons name="checkmark-circle" size={72} color={colors.success} />
+          <Ionicons
+            name={isOnline ? 'shield-checkmark' : 'checkmark-circle'}
+            size={72}
+            color={colors.success || '#10B981'}
+          />
         </View>
-        <Text style={styles.title}>Thank You!</Text>
+        <Text style={styles.title}>{isOnline ? 'Payment Successful!' : 'Order Placed!'}</Text>
         <Text style={styles.message}>
-          Your order has been submitted successfully. Our team will process it shortly.
+          {isOnline
+            ? 'Your payment has been securely processed. We are preparing your manufacturing contract now.'
+            : 'Your B2B order has been generated in pending state. Complete the bank transfer below to proceed.'}
         </Text>
 
         <Card style={styles.orderCard}>
@@ -32,22 +45,26 @@ export default function OrderSuccessScreen() {
           )}
         </Card>
 
-        <Text style={styles.bankTitle}>Payment — Bank Details</Text>
-        <Card style={styles.bankCard}>
-          <BankRow label="Account Name" value={bankDetails.accountName} />
-          <BankRow label="Bank Name" value={bankDetails.bankName} />
-          <BankRow label="Account Number" value={bankDetails.accountNumber} />
-          <BankRow label="IFSC Code" value={bankDetails.ifscCode} />
-          <BankRow label="Branch" value={bankDetails.branch} />
-        </Card>
+        {!isOnline && (
+          <>
+            <Text style={styles.bankTitle}>Payment — Bank Details</Text>
+            <Card style={styles.bankCard}>
+              <BankRow label="Account Name" value={bankDetails.accountName} />
+              <BankRow label="Bank Name" value={bankDetails.bankName} />
+              <BankRow label="Account Number" value={bankDetails.accountNumber} />
+              <BankRow label="IFSC Code" value={bankDetails.ifscCode} />
+              <BankRow label="Branch" value={bankDetails.branch} />
+            </Card>
 
-        <Text style={styles.note}>
-          Please transfer the payment to the above account and share the transaction reference with our support team.
-        </Text>
+            <Text style={styles.note}>
+              Please transfer the payment to the above account and share the transaction reference with our support team.
+            </Text>
+          </>
+        )}
 
         <Button
-          title="View Orders"
-          onPress={() => router.replace('/(tabs)/orders')}
+          title="Track Order"
+          onPress={() => router.replace(`/orders/${orderId}`)}
           fullWidth
           icon="receipt-outline"
           style={styles.button}

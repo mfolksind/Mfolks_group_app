@@ -4,7 +4,7 @@ export { Input } from './Input';
 export { Card } from './Card';
 export { Chip } from './Chip';
 export { Badge } from './Badge';
-export { StatusTag, getOrderStatusVariant } from './StatusTag';
+export { StatusTag, getOrderStatusVariant, getOrderStatusLabel } from './StatusTag';
 export { SearchBar } from './SearchBar';
 export { Dropdown } from './Dropdown';
 export { Tabs } from './Tabs';
@@ -16,4 +16,7 @@ export { Dialog } from './Dialog';
 export { Snackbar } from './Snackbar';
 export { SectionHeader } from './SectionHeader';
 export { HeroBannerCarousel } from './HeroBannerCarousel';
+export { SwipeButton } from './SwipeButton';
+export { HtmlDescription, isHtmlFormat, stripHtml } from './HtmlDescription';
+
 

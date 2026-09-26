@@ -8,16 +8,23 @@
 // ============================================================================
 
 export type UserType = 'buyer' | 'seller' | 'both';
-export type UserStatus = 'pending' | 'approved' | 'rejected';
+export type UserStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'inactive' | 'blocked';
 
 export interface User {
   _id: string;
-  companyName: string;
-  firstName: string;
-  lastName: string;
-  mobile: string;
+  id?: string;
+  name?: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
+  mobile?: string;
+  phone?: string;
   email: string;
-  userType: UserType;
+  role?: string;
+  userType?: UserType;
+  family?: string | { _id: string; name: string; slug: string; description?: string };
+  familyApprovalStatus?: 'pending' | 'approved' | 'rejected' | null;
+  approvedFamilies?: (string | { _id: string; name: string; slug: string })[];
   status: UserStatus;
   industryType?: string;
   addresses?: Address[];
@@ -28,12 +35,26 @@ export interface User {
 export interface Address {
   _id?: string;
   id?: string;
-  label: string;
-  line1: string;
+  user?: string;
+
+  // New Address schema fields (required for new API)
+  fullName?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  landmark?: string;
+  postalCode?: string;
+  addressType?: 'HOME' | 'OFFICE' | 'OTHER';
+
+  // Old Address schema fields (for backward compatibility)
+  label?: string;
+  line1?: string;
   line2?: string;
+  pincode?: string;
+
+  // Shared fields
   city: string;
   state: string;
-  pincode: string;
   country: string;
   isDefault?: boolean;
 }
@@ -45,8 +66,10 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   user: User;
-  accessToken: string;
-  refreshToken?: string;
+  tokens: {
+    accessToken: string;
+    refreshToken?: string;
+  };
 }
 
 export interface RegisterRequest {
@@ -109,6 +132,13 @@ export interface ProductImage {
   updatedAt?: string;
 }
 
+export interface UnitPriceOption {
+  unit: string;
+  price: number;
+  discountPrice?: number;
+  isDefault?: boolean;
+}
+
 export interface Variant {
   _id: string;
   product: Product; // Embedded product object from backend
@@ -125,7 +155,9 @@ export interface Variant {
   stock: number;
   weight?: number;
   dimensions?: string;
-  unit?: string; // e.g., 'pcs', 'MT', 'kg'
+  unit?: string; // Default/Primary unit (e.g. 'piece', 'kg', 'meter')
+  availableUnits?: string[]; // e.g. ['piece', 'kg', 'meter']
+  unitPrices?: UnitPriceOption[];
 
   // Related products (for recommendations)
   relatedSystems?: string[]; // Variant IDs
@@ -146,6 +178,12 @@ export interface Variant {
 // ============================================================================
 
 export type OrderStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED'
   | 'confirm_order'
   | 'payment_received'
   | 'dispatched'
@@ -155,9 +193,14 @@ export type OrderStatus =
 export interface OrderItem {
   variantId: string; // Variant ID (critical - NOT product ID)
   quantity: number;
+  unit?: string; // Selected unit ('kg', 'meter', 'piece')
   price: number;
   discountPrice?: number;
   subtotal: number;
+  variantName?: string;
+  productName?: string;
+  unitPrice?: number;
+  product?: any;
   variant?: Partial<Variant> & {
     product?: Partial<Product> & {
       brand?: string;
@@ -165,27 +208,56 @@ export interface OrderItem {
   };
 }
 
+export interface OrderTimelineItem {
+  status: string;
+  title?: string;
+  description?: string;
+  notes?: string;
+  timestamp?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  date?: string;
+}
+
 export interface Order {
   _id: string;
   orderNo: string;
+  orderNumber?: string;
   serialNo?: string;
   userId: string; // User ID
   items: OrderItem[]; // Line items
   totalPrice: number;
   totalAmount?: number;
+  tax?: number;
   taxes?: number;
+  shippingCharge?: number;
+  subtotal?: number;
   discount?: number;
-  deliveryAddress: Address;
+  deliveryAddress?: Address;
+  address?: Address;
   status: OrderStatus;
+  paymentStatus?: 'PENDING' | 'PAID' | 'REFUNDED' | 'FAILED' | string;
+  paymentMethod?: 'RAZORPAY' | 'BANK_TRANSFER' | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  statusHistory?: OrderTimelineItem[];
+  trackingHistory?: OrderTimelineItem[];
+  estimatedDeliveryDate?: string;
+  dispatchedAt?: string;
+  deliveredAt?: string;
 }
 
 export interface CreateOrderRequest {
-  items: OrderItem[];
-  deliveryAddressId: string; // Use existing address ID
+  addressId?: string;
+  shippingAddressId?: string;
+  paymentMethod?: 'RAZORPAY' | 'BANK_TRANSFER' | string;
   notes?: string;
+  items: {
+    variantId: string;
+    quantity: number;
+    unit?: string;
+  }[];
 }
 
 // ============================================================================
@@ -287,3 +359,57 @@ export interface NewsArticle {
   date: string;
   image?: string;
 }
+
+// ============================================================================
+// Support Ticket Types
+// ============================================================================
+
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+
+export interface TicketAttachment {
+  url: string;
+  publicId?: string;
+  fileName?: string;
+}
+
+export interface TicketSender {
+  _id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  profilePicture?: string;
+}
+
+export interface TicketMessage {
+  _id: string;
+  ticket: string;
+  sender: TicketSender | string;
+  message: string;
+  attachments?: TicketAttachment[];
+  isInternalNote?: boolean;
+  createdAt: string;
+}
+
+export interface Ticket {
+  _id: string;
+  id?: string;
+  ticketNumber: string;
+  user: TicketSender | string;
+  subject: string;
+  category?: string;
+  priority: TicketPriority;
+  status: TicketStatus;
+  assignedTo?: TicketSender | string;
+  lastMessageAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTicketRequest {
+  subject: string;
+  category?: string;
+  priority?: TicketPriority;
+  message: string;
+}
+

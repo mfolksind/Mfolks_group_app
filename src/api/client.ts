@@ -1,20 +1,32 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:6001';
+const DEFAULT_API_URL = 'https://api.mfolks.com';
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim() !== ''
+    ? process.env.EXPO_PUBLIC_API_URL.trim().replace(/\/$/, '')
+    : DEFAULT_API_URL;
 const API_TIMEOUT = parseInt(process.env.EXPO_PUBLIC_API_TIMEOUT || '30000', 10);
 
 // Token management
 export const getAuthToken = async (): Promise<string | null> => {
   try {
-    return await AsyncStorage.getItem('authToken');
+    const token = await AsyncStorage.getItem('authToken');
+    if (!token || token === 'undefined' || token === 'null' || token === '[object Object]') {
+      return null;
+    }
+    return token;
   } catch (error) {
     console.error('Error getting auth token:', error);
     return null;
   }
 };
 
-export const setAuthToken = async (token: string): Promise<void> => {
+export const setAuthToken = async (token?: string | null): Promise<void> => {
   try {
+    if (!token) {
+      await clearAuthToken();
+      return;
+    }
     await AsyncStorage.setItem('authToken', token);
   } catch (error) {
     console.error('Error setting auth token:', error);
@@ -31,15 +43,23 @@ export const clearAuthToken = async (): Promise<void> => {
 
 export const getRefreshToken = async (): Promise<string | null> => {
   try {
-    return await AsyncStorage.getItem('refreshToken');
+    const token = await AsyncStorage.getItem('refreshToken');
+    if (!token || token === 'undefined' || token === 'null' || token === '[object Object]') {
+      return null;
+    }
+    return token;
   } catch (error) {
     console.error('Error getting refresh token:', error);
     return null;
   }
 };
 
-export const setRefreshToken = async (token: string): Promise<void> => {
+export const setRefreshToken = async (token?: string | null): Promise<void> => {
   try {
+    if (!token) {
+      await clearRefreshToken();
+      return;
+    }
     await AsyncStorage.setItem('refreshToken', token);
   } catch (error) {
     console.error('Error setting refresh token:', error);
@@ -65,6 +85,19 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
   skipAuth?: boolean;
 }
+
+type AuthFailureCallback = () => void;
+let authFailureListener: AuthFailureCallback | null = null;
+
+export const subscribeAuthFailure = (callback: AuthFailureCallback) => {
+  authFailureListener = callback;
+};
+
+export const notifyAuthFailure = () => {
+  if (authFailureListener) {
+    authFailureListener();
+  }
+};
 
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
@@ -169,6 +202,7 @@ export const apiClient = async <T = any>(
               refreshSubscribers = [];
               await clearAuthToken();
               await clearRefreshToken();
+              notifyAuthFailure();
               return {
                 success: false,
                 message: 'Session expired. Please login again.',
@@ -180,6 +214,7 @@ export const apiClient = async <T = any>(
             refreshSubscribers = [];
             await clearAuthToken();
             await clearRefreshToken();
+            notifyAuthFailure();
             return {
               success: false,
               message: 'Session expired. Please login again.',
@@ -190,6 +225,7 @@ export const apiClient = async <T = any>(
           refreshSubscribers = [];
           await clearAuthToken();
           await clearRefreshToken();
+          notifyAuthFailure();
           return {
             success: false,
             message: 'Failed to refresh session. Please login again.',
@@ -214,11 +250,16 @@ export const apiClient = async <T = any>(
     }
 
     // Handle other error responses
+    let errMsg = responseData.message || `API Error: ${response.status} ${response.statusText}`;
+    if (responseData.errors && Array.isArray(responseData.errors) && responseData.errors.length > 0) {
+      errMsg = responseData.errors.map((e: any) => e.message || e.msg || e.path?.join('.')).filter(Boolean).join('. ');
+    } else if (typeof responseData.error === 'string') {
+      errMsg = responseData.error;
+    }
+
     return {
       success: false,
-      message:
-        responseData.message ||
-        `API Error: ${response.status} ${response.statusText}`,
+      message: errMsg,
       data: responseData.data,
     };
   } catch (error) {

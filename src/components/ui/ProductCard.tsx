@@ -1,5 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Image,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Product } from '@/types';
@@ -17,6 +23,8 @@ interface ProductCardProps {
 export function ProductCard({ product, variant, onBuy, compact = false }: ProductCardProps) {
   const router = useRouter();
   const { addToCart } = useCart();
+
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const name = variant?.variantName || product?.name || 'Product';
   const brand = (variant as any)?.product?.brand || (product as any)?.brand;
@@ -52,6 +60,11 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
     } else {
       handleCardPress();
     }
+
+    setAddedToCart(true);
+    setTimeout(() => {
+      setAddedToCart(false);
+    }, 1500);
   };
 
   const hasSpecs = !!(dimensions || weight);
@@ -79,7 +92,7 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
           </View>
         )}
 
-        {/* Real Discount Tag */}
+        {/* Real Discount Tag (Top Right) */}
         {hasDiscount && (
           <View style={styles.overlayTopRight}>
             <View style={styles.discountBadgeTag}>
@@ -88,8 +101,8 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
           </View>
         )}
 
-        {/* Real Stock Status Tag */}
-        <View style={styles.overlayBottomRight}>
+        {/* Real Stock Status Tag (Bottom Left) */}
+        <View style={styles.overlayBottomLeft}>
           {stock > 0 ? (
             <View style={styles.stockPillGreen}>
               <Ionicons name="cube-outline" size={9} color="#047857" />
@@ -101,11 +114,30 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
             </View>
           )}
         </View>
+
+        {/* Floating '+' Add Button overlay (Image 2 style) */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.floatingAddBtn,
+            addedToCart && styles.floatingAddBtnSuccess,
+            pressed && styles.floatingAddBtnPressed,
+            stock <= 0 && styles.floatingAddBtnDisabled,
+          ]}
+          disabled={stock <= 0}
+          onPress={handleAddToCart}
+          hitSlop={6}
+        >
+          <Ionicons
+            name={addedToCart ? "checkmark" : "add"}
+            size={18}
+            color={addedToCart ? '#10B981' : stock > 0 ? '#042178' : '#94A3B8'}
+          />
+        </Pressable>
       </View>
 
       {/* Compact Card Body Info */}
       <View style={styles.cardBody}>
-        {/* Brand & SKU Header Chips (rendered ONLY if available) */}
+        {/* Brand & SKU Header Chips */}
         {(brand || sku) && (
           <View style={styles.brandSkuRow}>
             {brand ? (
@@ -123,7 +155,7 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
           {name}
         </Text>
 
-        {/* Specs Pills Line (rendered ONLY if real specs exist) */}
+        {/* Specs Pills Line */}
         {!compact && hasSpecs && (
           <View style={styles.specsPillsRow}>
             {dimensions ? (
@@ -154,12 +186,11 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
           </View>
         </View>
 
-        {/* 2 DEDICATED ACTION BUTTONS: Explore Details & Add to Cart */}
+        {/* Single Action Button: View Details */}
         <View style={styles.cardActionsRow}>
-          {/* Button 1: Explore Product Details */}
           <Pressable
             style={({ pressed }) => [
-              styles.exploreButton,
+              styles.viewDetailsBtn,
               pressed && styles.buttonPressed,
             ]}
             onPress={(e) => {
@@ -167,27 +198,9 @@ export function ProductCard({ product, variant, onBuy, compact = false }: Produc
               handleCardPress();
             }}
           >
-            <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
-            <Text style={styles.exploreBtnText}>Explore</Text>
+            <Ionicons name="information-circle-outline" size={15} color={colors.primary} />
+            <Text style={styles.viewDetailsBtnText}>View Details</Text>
           </Pressable>
-
-          {/* Button 2: Add to Cart */}
-          {stock > 0 ? (
-            <Pressable
-              style={({ pressed }) => [
-                styles.luxuryCartButton,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={handleAddToCart}
-            >
-              <Ionicons name="cart-outline" size={13} color="#FFFFFF" />
-              <Text style={styles.luxuryCartBtnText}>Add</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.outOfStockBtn}>
-              <Text style={styles.outOfStockBtnText}>Out</Text>
-            </View>
-          )}
         </View>
       </View>
     </Pressable>
@@ -209,7 +222,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   cardPressed: {
-    opacity: 0.95,
+    opacity: 0.96,
     transform: [{ scale: 0.988 }],
   },
   cardImageFrame: {
@@ -249,10 +262,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
-  overlayBottomRight: {
+  overlayBottomLeft: {
     position: 'absolute',
     bottom: 6,
-    right: 8,
+    left: 8,
   },
   stockPillGreen: {
     flexDirection: 'row',
@@ -280,6 +293,38 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#B91C1C',
+  },
+  /* Floating '+' overlay button (Image 2 style) */
+  floatingAddBtn: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#042178',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  floatingAddBtnPressed: {
+    backgroundColor: '#EEF2FF',
+    transform: [{ scale: 0.92 }],
+  },
+  floatingAddBtnSuccess: {
+    borderColor: '#10B981',
+    backgroundColor: '#ECFDF5',
+  },
+  floatingAddBtnDisabled: {
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    opacity: 0.5,
   },
   cardBody: {
     paddingHorizontal: 12,
@@ -362,61 +407,31 @@ const styles = StyleSheet.create({
   cardActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
-  exploreButton: {
+  buttonPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
+  },
+  /* View Details Button */
+  viewDetailsBtn: {
     flex: 1,
+    height: 34,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 6,
     backgroundColor: '#EEF2FF',
     borderWidth: 1,
     borderColor: '#C7D2FE',
-    paddingVertical: 7,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  exploreBtnText: {
-    fontSize: 11,
+  viewDetailsBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  luxuryCartButton: {
-    flex: 1.2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: colors.primary,
-    paddingVertical: 7,
-    borderRadius: 6,
-    ...elevation.sm,
-  },
-  outOfStockBtn: {
-    flex: 1.2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 7,
-    borderRadius: 6,
-  },
-  outOfStockBtnText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
-  luxuryCartBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
     fontFamily: 'Inter_600SemiBold',
   },
 });

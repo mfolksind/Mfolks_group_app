@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Variant } from '@/types/backend';
+import { useAuth } from './AuthContext';
 
 export interface CartItem {
   variant: Variant;
   quantity: number;
+  unit: string;
 }
 
 interface CartTotals {
@@ -15,32 +17,48 @@ interface CartTotals {
 
 interface CartContextValue {
   cartItems: CartItem[];
-  addToCart: (variant: Variant, quantity?: number) => { success: boolean; message: string };
-  updateQuantity: (variantId: string, quantity: number) => void;
-  removeFromCart: (variantId: string) => void;
+  addToCart: (variant: Variant, quantity?: number, unit?: string) => { success: boolean; message: string };
+  updateQuantity: (variantId: string, unit: string, quantity: number) => void;
+  removeFromCart: (variantId: string, unit?: string) => void;
   clearCart: () => void;
   getItemCount: () => number;
   getCartTotals: () => CartTotals;
   isLoading: boolean;
 }
 
-const STORAGE_KEY = '@cart_items';
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id || user?._id;
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load cart from AsyncStorage on initial render
+  // Load cart from AsyncStorage whenever userId changes
   useEffect(() => {
     const loadCart = async () => {
       try {
-        const storedCart = await AsyncStorage.getItem(STORAGE_KEY);
+        setIsLoading(true);
+        if (!userId) {
+          setCartItems([]);
+          return;
+        }
+        const key = `@cart_items_${userId}`;
+        const storedCart = await AsyncStorage.getItem(key);
         if (storedCart) {
           const parsed = JSON.parse(storedCart);
           if (Array.isArray(parsed)) {
-            setCartItems(parsed);
+            // Ensure each item has a fallback unit
+            const itemsWithUnit = parsed.map((item: any) => ({
+              ...item,
+              unit: item.unit || item.variant?.unit || 'piece',
+            }));
+            setCartItems(itemsWithUnit);
+          } else {
+            setCartItems([]);
           }
+        } else {
+          setCartItems([]);
         }
       } catch (error) {
         console.error('Failed to load cart from storage:', error);
@@ -49,19 +67,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     };
     loadCart();
-  }, []);
+  }, [userId]);
 
   // Save cart to AsyncStorage whenever cartItems change
   const saveCart = async (items: CartItem[]) => {
     try {
       setCartItems(items);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      if (userId) {
+        const key = `@cart_items_${userId}`;
+        await AsyncStorage.setItem(key, JSON.stringify(items));
+      }
     } catch (error) {
       console.error('Failed to save cart to storage:', error);
     }
   };
 
-  const addToCart = (variant: Variant, quantityToAdd: number = 1): { success: boolean; message: string } => {
+  const addToCart = (
+    variant: Variant,
+    quantityToAdd: number = 1,
+    unit?: string
+  ): { success: boolean; message: string } => {
     if (!variant || !variant._id) {
       return { success: false, message: 'Invalid product details' };
     }
@@ -70,7 +95,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return { success: false, message: 'Product is out of stock' };
     }
 
-    const existingIndex = cartItems.findIndex((item) => item.variant._id === variant._id);
+    const selectedUnit = unit || variant.unit || 'piece';
+    const existingIndex = cartItems.findIndex(
+      (item) => item.variant._id === variant._id && (item.unit || item.variant.unit || 'piece') === selectedUnit
+    );
+
     let updatedItems = [...cartItems];
 
     if (existingIndex > -1) {
@@ -87,6 +116,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       updatedItems[existingIndex] = {
         ...updatedItems[existingIndex],
         quantity: newQty,
+        unit: selectedUnit,
       };
     } else {
       if (quantityToAdd > variant.stock) {
@@ -99,21 +129,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       updatedItems.push({
         variant,
         quantity: quantityToAdd,
+        unit: selectedUnit,
       });
     }
 
     saveCart(updatedItems);
-    return { success: true, message: 'Added to cart successfully' };
+    return { success: true, message: `Added ${quantityToAdd} ${selectedUnit} to cart successfully` };
   };
 
-  const updateQuantity = (variantId: string, newQuantity: number) => {
+  const updateQuantity = (variantId: string, unit: string, newQuantity: number) => {
     if (newQuantity <= 0) {
-      removeFromCart(variantId);
+      removeFromCart(variantId, unit);
       return;
     }
 
     const updatedItems = cartItems.map((item) => {
-      if (item.variant._id === variantId) {
+      const itemUnit = item.unit || item.variant.unit || 'piece';
+      if (item.variant._id === variantId && itemUnit === unit) {
         const clampedQuantity = Math.min(newQuantity, item.variant.stock || 1);
         return { ...item, quantity: clampedQuantity };
       }
@@ -123,8 +155,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     saveCart(updatedItems);
   };
 
-  const removeFromCart = (variantId: string) => {
-    const updatedItems = cartItems.filter((item) => item.variant._id !== variantId);
+  const removeFromCart = (variantId: string, unit?: string) => {
+    const updatedItems = cartItems.filter((item) => {
+      if (item.variant._id !== variantId) return true;
+      if (unit && (item.unit || item.variant.unit || 'piece') !== unit) return true;
+      return false;
+    });
     saveCart(updatedItems);
   };
 
@@ -138,8 +174,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const getCartTotals = (): CartTotals => {
     const subtotal = cartItems.reduce((sum, item) => {
-      const price = item.variant.discountPrice || item.variant.price || 0;
-      return sum + price * item.quantity;
+      const selectedUnit = item.unit || item.variant.unit || 'piece';
+      const matchedUnitPriceObj = item.variant.unitPrices?.find((p) => p.unit === selectedUnit);
+      const unitPrice = matchedUnitPriceObj
+        ? (matchedUnitPriceObj.discountPrice ?? matchedUnitPriceObj.price)
+        : (item.variant.discountPrice ?? item.variant.price ?? 0);
+
+      return sum + unitPrice * item.quantity;
     }, 0);
 
     const taxes = subtotal * 0.18; // 18% GST
